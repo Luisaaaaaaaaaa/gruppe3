@@ -6,6 +6,7 @@ from tkinter import ttk
 from app.identity.identity_check import IdentityCheck
 from app.patient_import.patient_list_client import PatientListClient
 from app.ui.form_frame import LoginForm
+from app.ui.scenario_selection_frame import ScenarioSelectionFrame
 
 
 class MainWindow:
@@ -63,6 +64,11 @@ class MainWindow:
             first_name, last_name, date_of_birth
         )
         self.form.show_result(result)
+
+        if result.success:
+            self.form.destroy()
+            self.scenario_frame = ScenarioSelectionFrame(self.root, result.patient)
+            self.scenario_frame.pack(fill="both", expand=True)
 
 
 def run_app() -> None:
