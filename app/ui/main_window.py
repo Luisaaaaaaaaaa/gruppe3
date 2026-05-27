@@ -3,8 +3,11 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
+from app.dialogue.dialogue_controller import DialogueController
 from app.identity.identity_check import IdentityCheck
 from app.patient_import.patient_list_client import PatientListClient
+from app.patient_import.patient_schema import PatientRecord
+from app.ui.dialogue_frame import DialogueFrame
 from app.ui.form_frame import LoginForm
 from app.ui.scenario_selection_frame import ScenarioSelectionFrame
 
@@ -13,8 +16,8 @@ class MainWindow:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("SET Patientenanmeldung")
-        self.root.geometry("680x420")
-        self.root.minsize(640, 400)
+        self.root.geometry("780x560")
+        self.root.minsize(700, 500)
 
         style = ttk.Style()
         style.theme_use("clam")
@@ -24,6 +27,7 @@ class MainWindow:
         )
         patients = repository.load_patients()
         self.identity_check = IdentityCheck(patients=patients, max_attempts=3)
+        self._current_patient: PatientRecord | None = None
 
         self.form = LoginForm(
             root,
@@ -66,9 +70,29 @@ class MainWindow:
         self.form.show_result(result)
 
         if result.success:
+            self._current_patient = result.patient
             self.form.destroy()
-            self.scenario_frame = ScenarioSelectionFrame(self.root, result.patient)
+            self.scenario_frame = ScenarioSelectionFrame(
+                self.root,
+                result.patient,
+                on_scenario_selected=self._handle_scenario_selected,
+            )
             self.scenario_frame.pack(fill="both", expand=True)
+
+    def _handle_scenario_selected(self, scenario_key: str) -> None:
+        self.scenario_frame.destroy()
+        self.root.title(f"Anamnese - Szenario {scenario_key}")
+
+        self._dialogue_frame = DialogueFrame(self.root)
+        self._dialogue_frame.pack(fill="both", expand=True)
+
+        self._controller = DialogueController(
+            scenario_key=scenario_key,
+            patient=self._current_patient,
+            display_message=self._dialogue_frame.display_message,
+            request_input=self._dialogue_frame.request_input,
+        )
+        self._controller.start()
 
 
 def run_app() -> None:

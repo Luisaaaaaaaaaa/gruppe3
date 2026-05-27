@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from app.dialogue.dialogue_controller import DialogueController; print\\('DialogueController import OK'\\)\")",
+      "Bash(python -c \"from app.ui.main_window import run_app; print\\('Full app import OK'\\)\")"
+    ]
+  }
+}
