@@ -19,9 +19,9 @@ class LoginForm(ttk.Frame):
         subtitle = ttk.Label(
             self,
             text=(
-                "Bitte melden Sie sich mit Vorname, Nachname und Geburtsdatum an. "
-                "Dieses System ist ein Assistenzsystem und stellt keine Diagnose "
-                "und keine Therapieempfehlung."
+                "Bitte melden Sie sich mit Ihrem Vornamen, Nachnamen und Geburtsdatum an. "
+                "Dieses System ist ausschließlich ein Assistenzsystem und stellt keine Diagnosen "
+                "und keine Therapieempfehlungen."
             ),
             wraplength=560,
             justify="left",
@@ -72,10 +72,20 @@ class LoginForm(ttk.Frame):
         )
         self.message_label.grid(row=4, column=0, sticky="w", pady=(18, 18))
 
-        self.submit_button = ttk.Button(self, text="Anmelden", command=self._submit)
-        self.submit_button.grid(row=5, column=0, sticky="e")
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=5, column=0, sticky="e")
+        button_frame.columnconfigure(0, weight=1)
+
+        cancel_button = ttk.Button(button_frame, text="Abbrechen", command=self._cancel)
+        cancel_button.grid(row=0, column=0, padx=(0, 8))
+
+        self.submit_button = ttk.Button(button_frame, text="Anmelden", command=self._submit)
+        self.submit_button.grid(row=0, column=1)
 
         self.first_name_entry.focus_set()
+
+    def _cancel(self) -> None:
+        self.master.destroy()
 
     def _submit(self) -> None:
         self._on_submit(
