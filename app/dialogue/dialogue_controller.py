@@ -9,11 +9,30 @@ from app.dialogue.consent_flow import (
 )
 from app.dialogue.state_machine import DialogueState, StateMachine
 from app.devices.simulators import Simulator
+from app.logger.audit_logger import (
+    log_answer,
+    log_escalation,
+    log_info,
+    log_red_flag,
+    log_state_change,
+)
 from app.medical_rules.red_flag_engine import RedFlag, check
 from app.output.export_json import export_summary
 from app.output.summary_builder import AnamnesisSummary, build_summary
 from app.patient_import.patient_schema import PatientRecord
-from app.scenarios.hypertension_scenario import QUESTIONS, AnamnesisQuestion
+from app.scenarios.chest_pain_scenario import (
+    QUESTIONS as CHEST_PAIN_QUESTIONS,
+    berechne_marburger_herzscore,
+)
+from app.scenarios.hypertension_scenario import (
+    QUESTIONS as HYPERTENSION_QUESTIONS,
+    AnamnesisQuestion,
+)
+
+SCENARIO_MAP: dict[str, str] = {
+    "B": "chest_pain",
+    "C": "hypertension",
+}
 
 
 class DialogueController:
@@ -25,6 +44,7 @@ class DialogueController:
         request_input: Callable[[Callable[[str], None]], None],
     ) -> None:
         self._scenario_key = scenario_key
+        self._scenario_id = SCENARIO_MAP.get(scenario_key, scenario_key)
         self._patient = patient
         self._display = display_message
         self._request_input = request_input
@@ -39,11 +59,14 @@ class DialogueController:
         self._current_question_index = 0
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
-        if self._scenario_key == "C":
-            return list(QUESTIONS)
+        if self._scenario_id == "hypertension":
+            return list(HYPERTENSION_QUESTIONS)
+        if self._scenario_id == "chest_pain":
+            return list(CHEST_PAIN_QUESTIONS)
         return []
 
     def start(self) -> None:
+        log_info(f"Dialogue gestartet: Szenario={self._scenario_key}, Patient={self._patient.patient_id}")
         self._handle_state()
 
     def _handle_state(self) -> None:
@@ -87,11 +110,13 @@ class DialogueController:
             return
 
         if not consent:
+            log_info("Zustimmung abgelehnt - Anamnese wird nicht durchgefuehrt")
             self._display(CONSENT_DECLINED)
             self._state_machine.jump_to(DialogueState.END)
             self._handle_state()
             return
 
+        log_info("Zustimmung erteilt - Anamnese beginnt")
         self._display(CONSENT_ACCEPTED)
         self._state_machine.advance()
         self._handle_state()
@@ -128,10 +153,12 @@ class DialogueController:
                 return
 
         self._answers[question.key] = answer.strip()
+        log_answer(question.key, answer.strip())
         self._current_question_index += 1
         self._ask_next_question()
 
     def _measure_vitals(self) -> None:
+        log_state_change("ANAMNESIS", "VITAL_PARAMETERS")
         self._display(
             "\nVitalparameter werden nun erfasst. "
             "Der Blutdruck wird ueber den Geraetesimulator gemessen..."
@@ -144,6 +171,7 @@ class DialogueController:
             "diastolisch": bp["diastolisch"],
         }
 
+        log_info(f"Vitalparameter gemessen: {bp['systolisch']}/{bp['diastolisch']} mmHg (simuliert)")
         self._display(
             f"Simulierter Blutdruck: {bp['systolisch']}/{bp['diastolisch']} mmHg "
             f"[Quelle: Geraetesimulator]"
@@ -153,15 +181,20 @@ class DialogueController:
         self._handle_state()
 
     def _check_red_flags(self) -> None:
+        log_state_change("VITAL_PARAMETERS", "RED_FLAG_CHECK")
         self._red_flags = check(
-            scenario="hypertension",
+            scenario=self._scenario_id,
             answers=self._answers,
             vitals=self._vitals,
         )
 
         if self._red_flags:
+            for rf in self._red_flags:
+                log_red_flag(rf.rule_id, rf.description, rf.severity)
+
             has_critical = any(rf.severity == "critical" for rf in self._red_flags)
             if has_critical:
+                log_escalation(f"{len(self._red_flags)} Red Flag(s), davon critical")
                 self._state_machine.jump_to(DialogueState.ESCALATION)
                 self._handle_state()
                 return
@@ -171,6 +204,8 @@ class DialogueController:
                 self._display(f"[{rf.rule_id}] {rf.description}")
             self._display("Hinweis: Aerztliche Pruefung empfohlen.")
             self._display("-------------------")
+        else:
+            log_info("Keine Red Flags ausgeloest")
 
         self._state_machine.advance()
         self._handle_state()
@@ -212,6 +247,9 @@ class DialogueController:
         for key, value in self._summary.vitals.items():
             self._display(f"  {key}: {value}")
 
+        if self._scenario_id == "chest_pain":
+            self._display_herzscore()
+
         if self._summary.red_flags:
             self._display("")
             self._display("Red Flags:")
@@ -230,6 +268,15 @@ class DialogueController:
 
         self._state_machine.advance()
         self._handle_state()
+
+    def _display_herzscore(self) -> None:
+        result = berechne_marburger_herzscore(self._answers)
+        self._display("")
+        self._display("Marburger Herzscore (nur zur Dokumentation):")
+        self._display(f"  Score: {result['score']} / {result['max_score']}")
+        self._display(f"  Kriterien: {result['details']}")
+        self._display(f"  Einordnung: {result['einordnung']}")
+        self._display(f"  Hinweis: {result['hinweis']}")
 
     def _show_handover(self) -> None:
         self._display(
@@ -253,4 +300,5 @@ class DialogueController:
         )
 
         filepath = export_summary(self._summary)
+        log_info(f"Export gespeichert: {filepath}")
         self._display(f"\n[Export gespeichert: {filepath}]")
