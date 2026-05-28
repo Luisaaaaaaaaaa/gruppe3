@@ -82,7 +82,83 @@ def check_hypertension(answers: dict[str, str], vitals: dict[str, int | float] |
     return flags
 
 
+def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | None = None) -> list[RedFlag]:
+    flags: list[RedFlag] = []
+
+    if _parse_ja_nein(answers.get("atemnot", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-001",
+            description="Atemnot bei Brustschmerz: Kardiopulmonales Ereignis nicht auszuschliessen.",
+            severity="critical",
+            triggered_by="atemnot=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("kaltschweissigkeit", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-002",
+            description="Kaltschweissigkeit bei Brustschmerz: Akutes Koronarsyndrom nicht auszuschliessen.",
+            severity="critical",
+            triggered_by="kaltschweissigkeit=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("synkope", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-003",
+            description="Synkope bei Brustschmerz: Sofortige aerztliche Uebernahme erforderlich.",
+            severity="critical",
+            triggered_by="synkope=ja",
+        ))
+
+    ausstrahlung = answers.get("ausstrahlung", "").lower()
+    if any(kw in ausstrahlung for kw in ("linker arm", "linke arm", "kiefer", "beide arme")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-004",
+            description="Typische Ausstrahlung (Arm/Kiefer): Kardiales Ereignis nicht auszuschliessen.",
+            severity="critical",
+            triggered_by=f"ausstrahlung={answers.get('ausstrahlung', '')}",
+        ))
+
+    schmerzcharakter = answers.get("schmerzcharakter", "").lower()
+    if any(kw in schmerzcharakter for kw in ("drueckend", "drückend", "eng", "vernichtend")):
+        if _parse_ja_nein(answers.get("belastungsabhaengigkeit", "")):
+            flags.append(RedFlag(
+                rule_id="CP-RF-005",
+                description="Drueckender/enger Brustschmerz bei Belastung: Typische Angina-pectoris-Konstellation.",
+                severity="critical",
+                triggered_by="schmerzcharakter+belastungsabhaengigkeit",
+            ))
+
+    if _parse_ja_nein(answers.get("bekannte_khk", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-006",
+            description="Brustschmerz bei bekannter KHK: Aerztliche Pruefung dringend erforderlich.",
+            severity="warning",
+            triggered_by="bekannte_khk=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("ausgepraege_schwaeche", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-007",
+            description="Ausgepreagte Schwaeche bei Brustschmerz: Hinweis auf haemodynamische Instabilitaet.",
+            severity="warning",
+            triggered_by="ausgepraege_schwaeche=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("uebelkeit", "")):
+        if _parse_ja_nein(answers.get("kaltschweissigkeit", "")):
+            flags.append(RedFlag(
+                rule_id="CP-RF-008",
+                description="Uebelkeit und Kaltschweissigkeit: Vegetative Begleitsymptomatik eines akuten Koronarsyndroms moeglich.",
+                severity="critical",
+                triggered_by="uebelkeit+kaltschweissigkeit=ja",
+            ))
+
+    return flags
+
+
 def check(scenario: str, answers: dict[str, str], vitals: dict | None = None) -> list[RedFlag]:
     if scenario == "hypertension":
         return check_hypertension(answers, vitals)
+    if scenario == "chest_pain":
+        return check_chest_pain(answers, vitals)
     return []
