@@ -24,12 +24,14 @@ from app.scenarios.chest_pain_scenario import (
     QUESTIONS as CHEST_PAIN_QUESTIONS,
     berechne_marburger_herzscore,
 )
+from app.scenarios.cough_scenario import QUESTIONS as COUGH_QUESTIONS
 from app.scenarios.hypertension_scenario import (
     QUESTIONS as HYPERTENSION_QUESTIONS,
     AnamnesisQuestion,
 )
 
 SCENARIO_MAP: dict[str, str] = {
+    "A": "cough",
     "B": "chest_pain",
     "C": "hypertension",
 }
@@ -59,6 +61,8 @@ class DialogueController:
         self._current_question_index = 0
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
+        if self._scenario_id == "cough":
+            return list(COUGH_QUESTIONS)
         if self._scenario_id == "hypertension":
             return list(HYPERTENSION_QUESTIONS)
         if self._scenario_id == "chest_pain":
