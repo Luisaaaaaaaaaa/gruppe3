@@ -25,6 +25,11 @@ from app.scenarios.chest_pain_scenario import (
     berechne_marburger_herzscore,
 )
 from app.scenarios.cough_scenario import QUESTIONS as COUGH_QUESTIONS
+from app.scenarios.diabetes_scenario import (
+    QUESTIONS as DIABETES_QUESTIONS,
+    berechne_diabetes_verlaufsuebersicht,
+    should_ask_follow_up,
+)
 from app.scenarios.hypertension_scenario import (
     QUESTIONS as HYPERTENSION_QUESTIONS,
     AnamnesisQuestion,
@@ -34,6 +39,7 @@ SCENARIO_MAP: dict[str, str] = {
     "A": "cough",
     "B": "chest_pain",
     "C": "hypertension",
+    "D": "diabetes",
 }
 
 
@@ -67,6 +73,8 @@ class DialogueController:
             return list(HYPERTENSION_QUESTIONS)
         if self._scenario_id == "chest_pain":
             return list(CHEST_PAIN_QUESTIONS)
+        if self._scenario_id == "diabetes":
+            return list(DIABETES_QUESTIONS)
         return []
 
     def start(self) -> None:
@@ -126,14 +134,24 @@ class DialogueController:
         self._handle_state()
 
     def _ask_next_question(self) -> None:
-        if self._current_question_index >= len(self._questions):
-            self._state_machine.advance()
-            self._handle_state()
-            return
+        while self._current_question_index < len(self._questions):
+            question = self._questions[self._current_question_index]
+            if self._should_ask_question(question):
+                self._display(f"\n{question.text}")
+                self._request_input(self._on_anamnesis_answer)
+                return
 
-        question = self._questions[self._current_question_index]
-        self._display(f"\n{question.text}")
-        self._request_input(self._on_anamnesis_answer)
+            self._answers[question.key] = ""
+            self._current_question_index += 1
+
+        self._state_machine.advance()
+        self._handle_state()
+
+    def _should_ask_question(self, question: AnamnesisQuestion) -> bool:
+        if self._scenario_id != "diabetes":
+            return True
+
+        return should_ask_follow_up(question.key, self._answers)
 
     def _on_anamnesis_answer(self, answer: str) -> None:
         if answer.strip().lower() == "abbrechen":
@@ -153,6 +171,11 @@ class DialogueController:
             normalized = answer.strip().lower()
             if normalized not in ("ja", "j", "nein", "n", "yes", "no", "y"):
                 self._display("Bitte antworten Sie mit 'ja' oder 'nein'.")
+                self._request_input(self._on_anamnesis_answer)
+                return
+        elif question.input_type == "zahl":
+            if not _is_number_or_unknown(answer):
+                self._display("Bitte geben Sie eine Zahl ein.")
                 self._request_input(self._on_anamnesis_answer)
                 return
 
@@ -244,8 +267,14 @@ class DialogueController:
         self._display(f"Zeitpunkt: {self._summary.timestamp}")
         self._display("")
         self._display("Anamnese-Antworten:")
-        for key, value in self._summary.answers.items():
-            self._display(f"  {key}: {value}")
+        if self._summary.grouped_sections:
+            for section, fields in self._summary.grouped_sections.items():
+                self._display(f"  {section}:")
+                for key, value in fields.items():
+                    self._display(f"    {key}: {value or 'keine Angabe'}")
+        else:
+            for key, value in self._summary.answers.items():
+                self._display(f"  {key}: {value}")
         self._display("")
         self._display(f"Vitalparameter ({self._summary.vitals_source}):")
         for key, value in self._summary.vitals.items():
@@ -253,6 +282,8 @@ class DialogueController:
 
         if self._scenario_id == "chest_pain":
             self._display_herzscore()
+        if self._scenario_id == "diabetes":
+            self._display_diabetes_verlaufsuebersicht()
 
         if self._summary.red_flags:
             self._display("")
@@ -282,6 +313,16 @@ class DialogueController:
         self._display(f"  Einordnung: {result['einordnung']}")
         self._display(f"  Hinweis: {result['hinweis']}")
 
+    def _display_diabetes_verlaufsuebersicht(self) -> None:
+        result = berechne_diabetes_verlaufsuebersicht(self._answers, self._vitals)
+        self._display("")
+        self._display("Diabetes-Verlaufsuebersicht (nur zur Dokumentation):")
+        self._display(f"  Verlauf: {result['verlauf']}")
+        self._display(f"  Aktuelle Symptome: {result['symptome']}")
+        self._display(f"  Komplikationen: {result['komplikationen']}")
+        self._display(f"  Vorbefunde: {result['vorbefunde']}")
+        self._display(f"  Hinweis: {result['hinweis']}")
+
     def _show_handover(self) -> None:
         self._display(
             "\nDie Zusammenfassung wurde fuer das aerztliche Personal erstellt. "
@@ -306,3 +347,15 @@ class DialogueController:
         filepath = export_summary(self._summary)
         log_info(f"Export gespeichert: {filepath}")
         self._display(f"\n[Export gespeichert: {filepath}]")
+
+
+def _is_number_or_unknown(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized == "unbekannt":
+        return True
+
+    try:
+        float(value.strip().replace(",", "."))
+        return True
+    except ValueError:
+        return False

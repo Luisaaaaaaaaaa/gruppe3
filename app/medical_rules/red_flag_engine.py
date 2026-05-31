@@ -156,9 +156,118 @@ def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | N
     return flags
 
 
+def check_diabetes(answers: dict[str, str], vitals: dict[str, int | float] | None = None) -> list[RedFlag]:
+    flags: list[RedFlag] = []
+
+    symptom_text = answers.get("hypo_hyper_beschwerden", "").lower()
+    wunde_text = answers.get("offene_wunde_fussproblem_details", "").lower()
+    blutzucker_text = answers.get("blutzuckerwert_details", "")
+
+    systolisch = _parse_number(answers.get("blutdruck_systolisch", ""))
+    diastolisch = _parse_number(answers.get("blutdruck_diastolisch", ""))
+
+    if vitals:
+        systolisch = systolisch or vitals.get("systolisch")
+        diastolisch = diastolisch or vitals.get("diastolisch")
+
+    if _parse_ja_nein(answers.get("hypo_hyper_hinweise", "")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-001",
+            description="Hinweise auf Hypo- oder Hyperglykaemie: Aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by="hypo_hyper_hinweise=ja",
+        ))
+
+    if any(keyword in symptom_text for keyword in ("bewusst", "verwirrt", "verwirrtheit", "ohnmacht")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-002",
+            description="Bewusstseinsstoerung oder Verwirrtheit bei Diabetes: Schwere Stoffwechselentgleisung nicht auszuschliessen.",
+            severity="critical",
+            triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
+        ))
+
+    if any(keyword in symptom_text for keyword in ("erbrechen", "atemnot", "luftnot", "dehyd")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-003",
+            description="Erbrechen, Atemnot oder Dehydratation bei Diabetes: Akute Stoffwechselentgleisung nicht auszuschliessen.",
+            severity="critical",
+            triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
+        ))
+
+    if any(keyword in symptom_text for keyword in ("brustschmerz", "druck auf der brust", "druckgefuehl")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-004",
+            description="Brustschmerz im Diabetes-Szenario: Sofortige aerztliche Abklaerung erforderlich.",
+            severity="critical",
+            triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
+        ))
+
+    if any(keyword in symptom_text for keyword in ("sehstoer", "verschwommen")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-005",
+            description="Sehstoerungen bei Diabetes: Aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
+        ))
+
+    if _parse_ja_nein(answers.get("offene_wunde_fussproblem", "")):
+        severity = "critical" if any(keyword in wunde_text for keyword in ("verschlechter", "entzu", "sekret", "stark")) else "warning"
+        flags.append(RedFlag(
+            rule_id="DM-RF-006",
+            description="Fussproblem oder offene Wunde bei Diabetes: Diabetischer Fuss oder Infektion muss aerztlich beurteilt werden.",
+            severity=severity,
+            triggered_by="offene_wunde_fussproblem=ja",
+        ))
+
+    blutzuckerwert = _extract_first_number(blutzucker_text)
+    if blutzuckerwert is not None and blutzuckerwert < 70:
+        flags.append(RedFlag(
+            rule_id="DM-RF-007",
+            description="Sehr niedriger angegebener Blutzuckerwert (< 70 mg/dl): Hypoglykaemie moeglich.",
+            severity="critical",
+            triggered_by=f"blutzuckerwert={blutzuckerwert}",
+        ))
+    elif blutzuckerwert is not None and blutzuckerwert >= 300:
+        flags.append(RedFlag(
+            rule_id="DM-RF-008",
+            description="Sehr hoher angegebener Blutzuckerwert (>= 300 mg/dl): Hyperglykaemie moeglich.",
+            severity="critical",
+            triggered_by=f"blutzuckerwert={blutzuckerwert}",
+        ))
+
+    if systolisch is not None and systolisch >= 180:
+        flags.append(RedFlag(
+            rule_id="DM-RF-009",
+            description="Systolischer Blutdruck >= 180 mmHg im Diabetes-Szenario: Kritischer Blutdruckwert.",
+            severity="critical",
+            triggered_by=f"systolisch={int(systolisch)}",
+        ))
+
+    if diastolisch is not None and diastolisch >= 120:
+        flags.append(RedFlag(
+            rule_id="DM-RF-010",
+            description="Diastolischer Blutdruck >= 120 mmHg im Diabetes-Szenario: Kritischer Blutdruckwert.",
+            severity="critical",
+            triggered_by=f"diastolisch={int(diastolisch)}",
+        ))
+
+    return flags
+
+
+def _extract_first_number(value: str) -> float | None:
+    tokens = value.replace(",", ".").split()
+    for token in tokens:
+        number = _parse_number(token)
+        if number is not None:
+            return number
+    return None
+
+
 def check(scenario: str, answers: dict[str, str], vitals: dict | None = None) -> list[RedFlag]:
     if scenario == "hypertension":
         return check_hypertension(answers, vitals)
     if scenario == "chest_pain":
         return check_chest_pain(answers, vitals)
+    if scenario == "diabetes":
+        return check_diabetes(answers, vitals)
     return []
