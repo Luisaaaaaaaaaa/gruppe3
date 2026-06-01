@@ -6,7 +6,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.logger.audit_logger import setup_logger
-from app.ui.main_window import run_app
+from app.ui.web_app import run_app
 
 
 if __name__ == "__main__":

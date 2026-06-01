@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable
 
 from app.dialogue.consent_flow import (
@@ -62,9 +63,62 @@ class DialogueController:
         self._vitals: dict[str, int | float] = {}
         self._red_flags: list[RedFlag] = []
         self._summary: AnamnesisSummary | None = None
+        self._export_path: Path | None = None
 
         self._questions = self._load_questions()
         self._current_question_index = 0
+        self._asked_question_count = 0
+
+    @property
+    def state(self) -> DialogueState:
+        return self._state_machine.state
+
+    @property
+    def scenario_id(self) -> str:
+        return self._scenario_id
+
+    @property
+    def summary(self) -> AnamnesisSummary | None:
+        return self._summary
+
+    @property
+    def export_path(self) -> Path | None:
+        return self._export_path
+
+    @property
+    def asked_question_count(self) -> int:
+        return self._asked_question_count
+
+    @property
+    def question_progress(self) -> tuple[int, int]:
+        if self.state != DialogueState.ANAMNESIS:
+            return self._asked_question_count, max(self._asked_question_count, 1)
+
+        remaining_questions = sum(
+            1
+            for question in self._questions[self._current_question_index :]
+            if self._should_ask_question(question)
+        )
+        total_questions = max(
+            (self._asked_question_count - 1) + remaining_questions,
+            1,
+        )
+        return self._asked_question_count, total_questions
+
+    @property
+    def phase_label(self) -> str:
+        phase_labels = {
+            DialogueState.EXPLAIN_ROLE: "Rollenerklaerung",
+            DialogueState.REQUEST_CONSENT: "Einwilligung",
+            DialogueState.ANAMNESIS: "Assistierte Anamnese",
+            DialogueState.VITAL_PARAMETERS: "Vitalparameter",
+            DialogueState.RED_FLAG_CHECK: "Risikopruefung",
+            DialogueState.ESCALATION: "Eskalation",
+            DialogueState.SUMMARY: "Zusammenfassung",
+            DialogueState.HANDOVER: "Uebergabe",
+            DialogueState.END: "Abschluss",
+        }
+        return phase_labels[self.state]
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
         if self._scenario_id == "cough":
@@ -137,6 +191,7 @@ class DialogueController:
         while self._current_question_index < len(self._questions):
             question = self._questions[self._current_question_index]
             if self._should_ask_question(question):
+                self._asked_question_count += 1
                 self._display(f"\n{question.text}")
                 self._request_input(self._on_anamnesis_answer)
                 return
@@ -344,9 +399,9 @@ class DialogueController:
             red_flags=self._red_flags,
         )
 
-        filepath = export_summary(self._summary)
-        log_info(f"Export gespeichert: {filepath}")
-        self._display(f"\n[Export gespeichert: {filepath}]")
+        self._export_path = export_summary(self._summary)
+        log_info(f"Export gespeichert: {self._export_path}")
+        self._display(f"\n[Export gespeichert: {self._export_path}]")
 
 
 def _is_number_or_unknown(value: str) -> bool:

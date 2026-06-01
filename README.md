@@ -78,6 +78,8 @@ Programm starten:
 python app/main.py
 ```
 
+Die Anwendung startet nun als lokale Weboberflaeche mit NiceGUI und ist standardmaessig unter `http://127.0.0.1:8080` erreichbar.
+
 ## Projektstruktur
 
 Wichtige Verzeichnisse und Dateien:
@@ -87,11 +89,12 @@ Wichtige Verzeichnisse und Dateien:
 - `app/medical_rules/`: Red-Flag-Erkennung
 - `app/devices/`: Geraetesimulatoren
 - `app/output/`: strukturierte Zusammenfassungen und Export
-- `app/ui/`: grafische Oberflaeche
+- `app/ui/`: grafische Oberflaeche auf Basis von NiceGUI
 
 ## Aktuell umgesetzt
 
 - Szenarioauswahl fuer A bis D in der UI
+- lokale NiceGUI-Weboberflaeche mit parallelen Browser-Sitzungen
 - Diabetes-Szenario als eigene Fragenliste mit Pflichtfragen und optionalen Folgefragen
 - Einbindung von `Szenario D` in den `dialogue_controller`
 - Diabetes-spezifische Red-Flags mit `warning` und `critical`

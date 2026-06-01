@@ -1,6 +1,7 @@
 import json
 from dataclasses import asdict
 from pathlib import Path
+from uuid import uuid4
 
 from app.output.summary_builder import AnamnesisSummary
 
@@ -10,7 +11,11 @@ def export_summary(summary: AnamnesisSummary, output_dir: Path | None = None) ->
         output_dir = Path("output")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"anamnese_{summary.patient_id}_{summary.timestamp.replace(':', '-')}.json"
+    unique_suffix = uuid4().hex[:8]
+    filename = (
+        f"anamnese_{summary.patient_id}_{summary.timestamp.replace(':', '-')}"
+        f"_{unique_suffix}.json"
+    )
     filepath = output_dir / filename
 
     data = asdict(summary)
