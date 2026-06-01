@@ -85,6 +85,7 @@ class MainWindow:
 
         self._dialogue_frame = DialogueFrame(self.root)
         self._dialogue_frame.pack(fill="both", expand=True)
+        self._dialogue_frame.set_cancel_callback(self._return_to_login)
 
         self._controller = DialogueController(
             scenario_key=scenario_key,
@@ -93,6 +94,17 @@ class MainWindow:
             request_input=self._dialogue_frame.request_input,
         )
         self._controller.start()
+
+    def _return_to_login(self) -> None:
+        self._dialogue_frame.destroy()
+        self._controller = None
+        self.root.title("SET Patientenanmeldung")
+        self.form = LoginForm(
+            self.root,
+            on_submit=self.handle_submit,
+            max_attempts=self.identity_check.max_attempts,
+        )
+        self.form.pack(fill="both", expand=True)
 
 
 def run_app() -> None:

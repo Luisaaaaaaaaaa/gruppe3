@@ -7,6 +7,7 @@ class DialogueFrame(ttk.Frame):
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master, padding=12)
         self._input_callback: Callable[[str], None] | None = None
+        self._cancel_callback: Callable[[], None] | None = None
         self._build_widgets()
 
     def _build_widgets(self) -> None:
@@ -96,12 +97,17 @@ class DialogueFrame(ttk.Frame):
             self._input_callback = None
             self.after(50, lambda: callback(text))
 
+    def set_cancel_callback(self, callback: Callable[[], None]) -> None:
+        self._cancel_callback = callback
+
     def _on_cancel(self) -> None:
         if self._input_callback:
             callback = self._input_callback
             self._input_callback = None
             self._set_input_enabled(False)
             self.after(50, lambda: callback("abbrechen"))
+        elif self._cancel_callback:
+            self._cancel_callback()
 
     def _set_input_enabled(self, enabled: bool) -> None:
         state = "normal" if enabled else "disabled"
