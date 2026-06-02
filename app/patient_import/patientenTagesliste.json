@@ -550,5 +550,87 @@
         ]
       }
     }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "system_type": "Praxisverwaltungssystem",
+      "system_name": "Beispiel-PVS",
+      "exported_at": "2026-05-18T10:00:00+02:00",
+      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+    },
+    "patient": {
+      "patient_id": "PRA-0000001",
+      "aktenzeichen": "0000-0000-A",
+      "status": "aktiv",
+      "stammdaten": {
+        "nachname": "Mustermann",
+        "vorname": "Max",
+        "geburtsdatum": "2000-11-11",
+        "geschlecht": "maennlich",
+        "sprache": "de"
+      },
+      "kontakt": {
+        "adresse": {
+          "strasse": "Hauptstraße",
+          "hausnummer": "1",
+          "plz": "00000",
+          "ort": "Musterstadt",
+          "land": "DE"
+        }
+      },
+      "versicherung": {
+        "versicherungsart": "gesetzlich",
+        "krankenkasse": {
+          "name": "AOK Muster",
+          "kostentraegerkennung_ik": "000000000",
+          "kassennummer": "000000000"
+        },
+        "versichertennummer": "T000000000",
+        "versichertenstatus": "Mitglied"
+      },
+      "administrativ": {
+        "erstkontakt_am": "2026-01-01",
+        "letzter_kontakt_am": "2026-06-02",
+        "behandelnde_praxis": "Hausarztpraxis Beispielzentrum",
+        "behandelnder_arzt": "Dr. med. Max",
+        "hausarztmodell": false,
+        "recall_aktiv": false,
+        "einwilligungen": {
+          "dsgvo_datenschutzhinweis_unterschrieben": true,
+          "email_kommunikation_erlaubt": false,
+          "sms_erinnerung_erlaubt": false
+        }
+      },
+      "medizinische_uebersicht": {
+        "blutgruppe": "0+",
+        "allergien": [],
+        "unvertraeglichkeiten": [],
+        "risikofaktoren": {
+          "rauchen": "nie",
+          "alkohol": "nie",
+          "bmi": 22.0,
+          "familienanamnese": []
+        },
+        "dauerdiagnosen": [],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [],
+          "bedarfsmedikation": [],
+          "medikationsplan_aktualisiert_am": null
+        },
+        "impfstatus": []
+      },
+      "letzte_messwerte": {
+        "vitalwerte": [],
+        "labor": []
+      },
+      "verlauf": [],
+      "dokumente": [],
+      "termine": {
+        "naechster_termin": null,
+        "offene_aufgaben": []
+      }
+    }
   }
 ]

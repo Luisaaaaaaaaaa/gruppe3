@@ -597,6 +597,8 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                         current_question / total_questions if total_questions else 0
                     )
                     ui.linear_progress(value=progress_value).classes("w-48")
+                    pct = round(progress_value * 100)
+                    ui.label(f"{pct}%").classes("text-sm text-slate-500")
                     ui.label(
                         "Die Anzeige passt sich an optionale Folgefragen im Verlauf an."
                     ).classes("text-xs text-slate-500")
@@ -745,9 +747,10 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             ui.label(f"{current_question} von {total_questions} Fragen").classes(
                 "text-xl font-semibold"
             )
-            ui.linear_progress(
-                value=current_question / total_questions if total_questions else 0
-            ).classes("w-full")
+            progress_value = current_question / total_questions if total_questions else 0
+            ui.linear_progress(value=progress_value).classes("w-full")
+            pct = round(progress_value * 100)
+            ui.label(f"{pct}%").classes("text-sm leading-6 text-slate-600")
             ui.label(
                 f"Bereits angezeigte Fragen: {session.controller.asked_question_count}"
             ).classes("text-sm leading-6 text-slate-600")
