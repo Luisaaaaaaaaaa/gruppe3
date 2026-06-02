@@ -10,9 +10,135 @@ from app.medical_rules.red_flag_engine import (
     RedFlag,
     check,
     check_chest_pain,
+    check_cough,
     check_diabetes,
     check_hypertension,
 )
+
+
+# ========================================================================
+# Husten / Atemwegsinfekt (Szenario A)
+# ========================================================================
+
+
+class TestCheckCough:
+    def test_no_flags_for_routine_case(self) -> None:
+        answers = {
+            "dyspnoe": "nein",
+            "belastungsdyspnoe": "nein",
+            "blutbeimengung": "nein",
+            "fieber": "nein",
+            "thorakale_schmerzen": "nein",
+            "vorerkrankungen": "keine",
+            "auswurf_farbe": "klar",
+        }
+        flags = check_cough(answers)
+        assert flags == []
+
+    def test_dyspnoe_critical(self) -> None:
+        answers = {"dyspnoe": "ja"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-001" and f.severity == "critical" for f in flags)
+
+    def test_haemoptysen_critical(self) -> None:
+        answers = {"blutbeimengung": "ja"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-002" and f.severity == "critical" for f in flags)
+
+    def test_fieber_alone_warning(self) -> None:
+        answers = {"fieber": "ja", "dyspnoe": "nein", "thorakale_schmerzen": "nein"}
+        flags = check_cough(answers)
+        rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
+        assert rf.severity == "warning"
+
+    def test_fieber_plus_dyspnoe_critical(self) -> None:
+        answers = {"fieber": "ja", "dyspnoe": "ja"}
+        flags = check_cough(answers)
+        rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
+        assert rf.severity == "critical"
+
+    def test_fieber_plus_thoraxschmerz_critical(self) -> None:
+        answers = {"fieber": "ja", "thorakale_schmerzen": "ja"}
+        flags = check_cough(answers)
+        rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
+        assert rf.severity == "critical"
+
+    def test_thorakale_schmerzen_warning(self) -> None:
+        answers = {"thorakale_schmerzen": "ja"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-004" and f.severity == "warning" for f in flags)
+
+    def test_relevante_vorerkrankung_copd_warning(self) -> None:
+        answers = {"vorerkrankungen": "COPD seit 5 Jahren", "fieber": "nein"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-005" and f.severity == "warning" for f in flags)
+
+    def test_relevante_vorerkrankung_plus_fieber_critical(self) -> None:
+        answers = {"vorerkrankungen": "Asthma bronchiale", "fieber": "ja"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-005" and f.severity == "critical" for f in flags)
+
+    def test_immunsuppression_detected(self) -> None:
+        answers = {"vorerkrankungen": "Immunsuppression nach Transplantation", "fieber": "nein"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-005" for f in flags)
+
+    def test_herzinsuffizienz_detected(self) -> None:
+        answers = {"vorerkrankungen": "Herzinsuffizienz NYHA III", "fieber": "nein"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-005" for f in flags)
+
+    def test_irrelevante_vorerkrankung_no_flag(self) -> None:
+        answers = {"vorerkrankungen": "Heuschnupfen", "fieber": "nein"}
+        flags = check_cough(answers)
+        assert not any(f.rule_id == "COUGH-RF-005" for f in flags)
+
+    def test_belastungsdyspnoe_without_ruhedyspnoe_warning(self) -> None:
+        answers = {"belastungsdyspnoe": "ja", "dyspnoe": "nein"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-006" and f.severity == "warning" for f in flags)
+
+    def test_belastungsdyspnoe_with_ruhedyspnoe_no_separate_flag(self) -> None:
+        answers = {"belastungsdyspnoe": "ja", "dyspnoe": "ja"}
+        flags = check_cough(answers)
+        assert not any(f.rule_id == "COUGH-RF-006" for f in flags)
+
+    def test_spo2_below_92_critical(self) -> None:
+        flags = check_cough({}, vitals={"spo2": 88})
+        assert any(f.rule_id == "COUGH-RF-007" and f.severity == "critical" for f in flags)
+
+    def test_spo2_92_to_94_warning(self) -> None:
+        flags = check_cough({}, vitals={"spo2": 93})
+        assert any(f.rule_id == "COUGH-RF-008" and f.severity == "warning" for f in flags)
+
+    def test_spo2_normal_no_flag(self) -> None:
+        flags = check_cough({}, vitals={"spo2": 97})
+        assert not any(f.rule_id in ("COUGH-RF-007", "COUGH-RF-008") for f in flags)
+
+    def test_blutiger_auswurf_freitext_critical(self) -> None:
+        answers = {"auswurf_farbe": "blutig, rostfarben", "blutbeimengung": "nein"}
+        flags = check_cough(answers)
+        assert any(f.rule_id == "COUGH-RF-009" and f.severity == "critical" for f in flags)
+
+    def test_blutiger_auswurf_no_duplicate_with_blutbeimengung(self) -> None:
+        answers = {"auswurf_farbe": "blutig", "blutbeimengung": "ja"}
+        flags = check_cough(answers)
+        assert not any(f.rule_id == "COUGH-RF-009" for f in flags)
+
+    def test_missing_fields_no_crash(self) -> None:
+        flags = check_cough({})
+        assert flags == []
+
+    def test_multiple_flags_severe_case(self) -> None:
+        answers = {
+            "dyspnoe": "ja",
+            "blutbeimengung": "ja",
+            "fieber": "ja",
+            "thorakale_schmerzen": "ja",
+            "vorerkrankungen": "COPD",
+        }
+        flags = check_cough(answers)
+        assert len(flags) >= 4
 
 
 # ========================================================================
@@ -76,6 +202,76 @@ class TestCheckHypertension:
         flags = check_hypertension(answers, vitals)
         assert any(f.rule_id == "HYP-RF-001" for f in flags)
         assert any(f.rule_id == "HYP-RF-002" for f in flags)
+
+    def test_headache_warning_normal_bp(self) -> None:
+        answers = {"kopfschmerz": "ja", "blutdruck_systolisch": "150"}
+        flags = check_hypertension(answers)
+        rf = next(f for f in flags if f.rule_id == "HYP-RF-007")
+        assert rf.severity == "warning"
+
+    def test_headache_critical_with_high_bp(self) -> None:
+        answers = {"kopfschmerz": "ja", "blutdruck_systolisch": "195"}
+        flags = check_hypertension(answers)
+        rf = next(f for f in flags if f.rule_id == "HYP-RF-007")
+        assert rf.severity == "critical"
+
+    def test_multiple_organ_symptoms_plus_high_bp(self) -> None:
+        answers = {
+            "kopfschmerz": "ja",
+            "atemnot": "ja",
+            "blutdruck_systolisch": "170",
+        }
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-008" and f.severity == "critical" for f in flags)
+
+    def test_multiple_organ_symptoms_low_bp_no_rf008(self) -> None:
+        answers = {
+            "kopfschmerz": "ja",
+            "atemnot": "ja",
+            "blutdruck_systolisch": "140",
+        }
+        flags = check_hypertension(answers)
+        assert not any(f.rule_id == "HYP-RF-008" for f in flags)
+
+    def test_grade2_systolic_160_warning(self) -> None:
+        answers = {"blutdruck_systolisch": "165"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-009" and f.severity == "warning" for f in flags)
+
+    def test_grade2_diastolic_100_warning(self) -> None:
+        answers = {"blutdruck_diastolisch": "105"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-010" and f.severity == "warning" for f in flags)
+
+    def test_relevant_preexisting_condition_warning(self) -> None:
+        answers = {"vorerkrankungen": "Herzinfarkt vor 2 Jahren", "blutdruck_systolisch": "145"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-011" and f.severity == "warning" for f in flags)
+
+    def test_relevant_preexisting_condition_critical_with_high_bp(self) -> None:
+        answers = {"vorerkrankungen": "KHK seit langem", "blutdruck_systolisch": "175"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-011" and f.severity == "critical" for f in flags)
+
+    def test_irrelevant_preexisting_no_rf011(self) -> None:
+        answers = {"vorerkrankungen": "Heuschnupfen", "blutdruck_systolisch": "180"}
+        flags = check_hypertension(answers)
+        assert not any(f.rule_id == "HYP-RF-011" for f in flags)
+
+    def test_tachycardia_critical(self) -> None:
+        answers = {"puls": "125"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-012" and f.severity == "critical" for f in flags)
+
+    def test_bradycardia_warning(self) -> None:
+        answers = {"puls": "45"}
+        flags = check_hypertension(answers)
+        assert any(f.rule_id == "HYP-RF-013" and f.severity == "warning" for f in flags)
+
+    def test_normal_pulse_no_flag(self) -> None:
+        answers = {"puls": "72"}
+        flags = check_hypertension(answers)
+        assert not any(f.rule_id in ("HYP-RF-012", "HYP-RF-013") for f in flags)
 
     def test_comma_number_parsing(self) -> None:
         answers = {"blutdruck_systolisch": "185,5"}
@@ -167,6 +363,64 @@ class TestCheckChestPain:
         answers = {"uebelkeit": "ja", "kaltschweissigkeit": "nein"}
         flags = check_chest_pain(answers)
         assert not any(f.rule_id == "CP-RF-008" for f in flags)
+
+    def test_pressing_pain_no_rest_improvement_critical(self) -> None:
+        answers = {"schmerzcharakter": "drückend", "ruhe_besserung": "nein"}
+        flags = check_chest_pain(answers)
+        assert any(f.rule_id == "CP-RF-009" and f.severity == "critical" for f in flags)
+
+    def test_pressing_pain_rest_improvement_no_rf009(self) -> None:
+        answers = {"schmerzcharakter": "drückend", "ruhe_besserung": "ja"}
+        flags = check_chest_pain(answers)
+        assert not any(f.rule_id == "CP-RF-009" for f in flags)
+
+    def test_age_plus_risk_factors_warning(self) -> None:
+        answers = {
+            "alter_ueber_55": "ja",
+            "kardiovaskulaere_risikofaktoren": "Rauchen, Diabetes",
+        }
+        flags = check_chest_pain(answers)
+        assert any(f.rule_id == "CP-RF-010" and f.severity == "warning" for f in flags)
+
+    def test_age_without_risk_factors_no_rf010(self) -> None:
+        answers = {
+            "alter_ueber_55": "ja",
+            "kardiovaskulaere_risikofaktoren": "keine",
+        }
+        flags = check_chest_pain(answers)
+        assert not any(f.rule_id == "CP-RF-010" for f in flags)
+
+    def test_no_palpation_pain_plus_exertion_warning(self) -> None:
+        answers = {
+            "druckschmerz_thoraxwand": "nein",
+            "belastungsabhaengigkeit": "ja",
+        }
+        flags = check_chest_pain(answers)
+        assert any(f.rule_id == "CP-RF-011" and f.severity == "warning" for f in flags)
+
+    def test_palpation_pain_yes_no_rf011(self) -> None:
+        answers = {
+            "druckschmerz_thoraxwand": "ja",
+            "belastungsabhaengigkeit": "ja",
+        }
+        flags = check_chest_pain(answers)
+        assert not any(f.rule_id == "CP-RF-011" for f in flags)
+
+    def test_high_bp_systolic_critical(self) -> None:
+        flags = check_chest_pain({}, vitals={"systolisch": 190})
+        assert any(f.rule_id == "CP-RF-012" and f.severity == "critical" for f in flags)
+
+    def test_high_bp_diastolic_critical(self) -> None:
+        flags = check_chest_pain({}, vitals={"diastolisch": 125})
+        assert any(f.rule_id == "CP-RF-013" and f.severity == "critical" for f in flags)
+
+    def test_low_spo2_critical(self) -> None:
+        flags = check_chest_pain({}, vitals={"spo2": 88})
+        assert any(f.rule_id == "CP-RF-014" and f.severity == "critical" for f in flags)
+
+    def test_normal_vitals_no_vital_flags(self) -> None:
+        flags = check_chest_pain({}, vitals={"systolisch": 130, "diastolisch": 80, "spo2": 97})
+        assert not any(f.rule_id in ("CP-RF-012", "CP-RF-013", "CP-RF-014") for f in flags)
 
     def test_missing_fields_no_crash(self) -> None:
         flags = check_chest_pain({})
@@ -292,6 +546,98 @@ class TestCheckDiabetes:
         assert any(f.rule_id == "DM-RF-009" for f in flags)
         assert any(f.rule_id == "DM-RF-010" for f in flags)
 
+    def test_hba1c_very_high_critical(self) -> None:
+        answers = {"hba1c_wert": "11,2"}
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-011" and f.severity == "critical" for f in flags)
+
+    def test_hba1c_high_warning(self) -> None:
+        answers = {"hba1c_wert": "9,0"}
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-012" and f.severity == "warning" for f in flags)
+
+    def test_hba1c_acceptable_no_flag(self) -> None:
+        answers = {"hba1c_wert": "7,2"}
+        flags = check_diabetes(answers)
+        assert not any(f.rule_id in ("DM-RF-011", "DM-RF-012") for f in flags)
+
+    def test_significant_weight_loss_warning(self) -> None:
+        answers = {
+            "gewichtsveraenderung": "ja",
+            "gewichtsveraenderung_details": "6 kg abgenommen in 4 Wochen",
+        }
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-013" and f.severity == "warning" for f in flags)
+
+    def test_small_weight_loss_no_flag(self) -> None:
+        answers = {
+            "gewichtsveraenderung": "ja",
+            "gewichtsveraenderung_details": "2 kg abgenommen",
+        }
+        flags = check_diabetes(answers)
+        assert not any(f.rule_id == "DM-RF-013" for f in flags)
+
+    def test_weight_gain_no_flag(self) -> None:
+        answers = {
+            "gewichtsveraenderung": "ja",
+            "gewichtsveraenderung_details": "3 kg zugenommen",
+        }
+        flags = check_diabetes(answers)
+        assert not any(f.rule_id == "DM-RF-013" for f in flags)
+
+    def test_complications_plus_hypo_signs_critical(self) -> None:
+        answers = {
+            "folgeerkrankungen_bekannt": "ja",
+            "folgeerkrankungen_details": "Neuropathie",
+            "hypo_hyper_hinweise": "ja",
+        }
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-014" and f.severity == "critical" for f in flags)
+
+    def test_complications_without_symptoms_no_rf014(self) -> None:
+        answers = {
+            "folgeerkrankungen_bekannt": "ja",
+            "folgeerkrankungen_details": "Neuropathie",
+            "hypo_hyper_hinweise": "nein",
+        }
+        flags = check_diabetes(answers)
+        assert not any(f.rule_id == "DM-RF-014" for f in flags)
+
+    def test_nephropathy_warning(self) -> None:
+        answers = {
+            "folgeerkrankungen_bekannt": "ja",
+            "folgeerkrankungen_details": "diabetische Nephropathie Stadium 3",
+        }
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-015" and f.severity == "warning" for f in flags)
+
+    def test_insulin_plus_hypo_symptoms_critical(self) -> None:
+        answers = {
+            "medikamente": "Insulin Lantus 20 IE",
+            "hypo_hyper_hinweise": "ja",
+            "hypo_hyper_beschwerden": "Zittern und Schweissausbruch",
+        }
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-016" and f.severity == "critical" for f in flags)
+
+    def test_sulfonylharnstoff_plus_hypo_critical(self) -> None:
+        answers = {
+            "medikamente": "Glimepirid 2mg",
+            "hypo_hyper_hinweise": "ja",
+            "hypo_hyper_beschwerden": "starker Schwindel und Schwaeche",
+        }
+        flags = check_diabetes(answers)
+        assert any(f.rule_id == "DM-RF-016" and f.severity == "critical" for f in flags)
+
+    def test_metformin_hypo_no_rf016(self) -> None:
+        answers = {
+            "medikamente": "Metformin 1000mg",
+            "hypo_hyper_hinweise": "ja",
+            "hypo_hyper_beschwerden": "Zittern",
+        }
+        flags = check_diabetes(answers)
+        assert not any(f.rule_id == "DM-RF-016" for f in flags)
+
     def test_missing_fields_no_crash(self) -> None:
         flags = check_diabetes({})
         assert flags == []
@@ -322,9 +668,10 @@ class TestCheckDispatcher:
         flags = check("unknown", {"atemnot": "ja"})
         assert flags == []
 
-    def test_cough_returns_empty_currently(self) -> None:
-        flags = check("cough", {"atemnot": "ja"})
-        assert flags == []
+    def test_routes_to_cough(self) -> None:
+        answers = {"dyspnoe": "ja"}
+        flags = check("cough", answers)
+        assert any(f.rule_id.startswith("COUGH") for f in flags)
 
 
 # ========================================================================
