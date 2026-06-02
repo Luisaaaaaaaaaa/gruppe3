@@ -79,6 +79,73 @@ def check_hypertension(answers: dict[str, str], vitals: dict[str, int | float] |
             triggered_by="sehstoerungen=ja",
         ))
 
+    if _parse_ja_nein(answers.get("kopfschmerz", "")):
+        severity = "critical" if (sys_val and sys_val >= 180) else "warning"
+        flags.append(RedFlag(
+            rule_id="HYP-RF-007",
+            description="Kopfschmerz bei Bluthochdruck: Hypertensive Krise oder zerebrovaskulaeres Ereignis nicht auszuschliessen.",
+            severity=severity,
+            triggered_by="kopfschmerz=ja",
+        ))
+
+    organ_symptome = sum([
+        _parse_ja_nein(answers.get("kopfschmerz", "")),
+        _parse_ja_nein(answers.get("brustschmerz", "")),
+        _parse_ja_nein(answers.get("atemnot", "")),
+        _parse_ja_nein(answers.get("neurologische_symptome", "")),
+        _parse_ja_nein(answers.get("sehstoerungen", "")),
+    ])
+    if organ_symptome >= 2 and sys_val and sys_val >= 160:
+        flags.append(RedFlag(
+            rule_id="HYP-RF-008",
+            description="Mehrere Endorgansymptome bei deutlich erhoehtem Blutdruck: Hypertensiver Notfall mit Organschaden wahrscheinlich.",
+            severity="critical",
+            triggered_by=f"organ_symptome={organ_symptome}+systolisch={int(sys_val)}",
+        ))
+
+    if sys_val and 160 <= sys_val < 180:
+        flags.append(RedFlag(
+            rule_id="HYP-RF-009",
+            description="Systolischer Blutdruck 160-179 mmHg: Hypertonie Grad 2, aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by=f"systolisch={int(sys_val)}",
+        ))
+
+    if dia_val and 100 <= dia_val < 120:
+        flags.append(RedFlag(
+            rule_id="HYP-RF-010",
+            description="Diastolischer Blutdruck 100-119 mmHg: Hypertonie Grad 2, aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by=f"diastolisch={int(dia_val)}",
+        ))
+
+    vorerkrankungen = answers.get("vorerkrankungen", "").lower()
+    relevante = ("herzinfarkt", "schlaganfall", "niereninsuffizienz", "nierenschaden", "herzinsuffizienz", "khk", "koronar")
+    if any(kw in vorerkrankungen for kw in relevante):
+        severity = "critical" if (sys_val and sys_val >= 160) else "warning"
+        flags.append(RedFlag(
+            rule_id="HYP-RF-011",
+            description="Relevante kardiovaskulaere oder renale Vorerkrankung bei erhoehtem Blutdruck: Endorganschaden-Risiko erhoet.",
+            severity=severity,
+            triggered_by=f"vorerkrankungen={answers.get('vorerkrankungen', '')}",
+        ))
+
+    puls_val = _parse_number(answers.get("puls", ""))
+    if puls_val is not None and puls_val >= 120:
+        flags.append(RedFlag(
+            rule_id="HYP-RF-012",
+            description="Tachykardie (Puls >= 120/min) bei Bluthochdruck: Kardiale Dekompensation nicht auszuschliessen.",
+            severity="critical",
+            triggered_by=f"puls={int(puls_val)}",
+        ))
+    elif puls_val is not None and puls_val < 50:
+        flags.append(RedFlag(
+            rule_id="HYP-RF-013",
+            description="Bradykardie (Puls < 50/min) bei Bluthochdruck: Erregungsleitungsstoerung nicht auszuschliessen.",
+            severity="warning",
+            triggered_by=f"puls={int(puls_val)}",
+        ))
+
     return flags
 
 
@@ -152,6 +219,70 @@ def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | N
                 severity="critical",
                 triggered_by="uebelkeit+kaltschweissigkeit=ja",
             ))
+
+    schmerzcharakter = answers.get("schmerzcharakter", "").lower()
+    if any(kw in schmerzcharakter for kw in ("drueckend", "drückend", "eng", "vernichtend")):
+        if not _parse_ja_nein(answers.get("ruhe_besserung", "")):
+            ruhe_val = answers.get("ruhe_besserung", "").strip().lower()
+            if ruhe_val in ("nein", "n", "no"):
+                flags.append(RedFlag(
+                    rule_id="CP-RF-009",
+                    description="Drueckender/enger Brustschmerz ohne Besserung in Ruhe: Instabile Angina oder ACS nicht auszuschliessen.",
+                    severity="critical",
+                    triggered_by="schmerzcharakter+ruhe_besserung=nein",
+                ))
+
+    if _parse_ja_nein(answers.get("alter_ueber_55", "")):
+        risikofaktoren = answers.get("kardiovaskulaere_risikofaktoren", "").lower()
+        hat_risikofaktoren = any(kw in risikofaktoren for kw in (
+            "rauch", "diabet", "bluthochdruck", "hypertonie", "cholesterin", "famili",
+        ))
+        if hat_risikofaktoren:
+            flags.append(RedFlag(
+                rule_id="CP-RF-010",
+                description="Alter >55 mit kardiovaskulaeren Risikofaktoren bei Brustschmerz: Erhoehte Wahrscheinlichkeit fuer kardiales Ereignis.",
+                severity="warning",
+                triggered_by="alter_ueber_55+risikofaktoren",
+            ))
+
+    if not _parse_ja_nein(answers.get("druckschmerz_thoraxwand", "")):
+        druckschmerz_val = answers.get("druckschmerz_thoraxwand", "").strip().lower()
+        if druckschmerz_val in ("nein", "n", "no"):
+            if _parse_ja_nein(answers.get("belastungsabhaengigkeit", "")):
+                flags.append(RedFlag(
+                    rule_id="CP-RF-011",
+                    description="Nicht reproduzierbarer Schmerz bei Belastungsabhaengigkeit: Kardiale Genese wahrscheinlicher.",
+                    severity="warning",
+                    triggered_by="druckschmerz_thoraxwand=nein+belastungsabhaengigkeit=ja",
+                ))
+
+    sys_val = vitals.get("systolisch") if vitals else None
+    dia_val = vitals.get("diastolisch") if vitals else None
+
+    if sys_val is not None and sys_val >= 180:
+        flags.append(RedFlag(
+            rule_id="CP-RF-012",
+            description="Systolischer Blutdruck >= 180 mmHg bei Brustschmerz: Hypertensiver Notfall mit kardialem Risiko.",
+            severity="critical",
+            triggered_by=f"systolisch={int(sys_val)}",
+        ))
+
+    if dia_val is not None and dia_val >= 120:
+        flags.append(RedFlag(
+            rule_id="CP-RF-013",
+            description="Diastolischer Blutdruck >= 120 mmHg bei Brustschmerz: Hypertensiver Notfall mit kardialem Risiko.",
+            severity="critical",
+            triggered_by=f"diastolisch={int(dia_val)}",
+        ))
+
+    spo2 = vitals.get("spo2") if vitals else None
+    if spo2 is not None and spo2 < 92:
+        flags.append(RedFlag(
+            rule_id="CP-RF-014",
+            description="SpO2 < 92% bei Brustschmerz: Relevante Hypoxaemie, sofortige aerztliche Uebernahme erforderlich.",
+            severity="critical",
+            triggered_by=f"spo2={spo2}",
+        ))
 
     return flags
 
@@ -251,6 +382,149 @@ def check_diabetes(answers: dict[str, str], vitals: dict[str, int | float] | Non
             triggered_by=f"diastolisch={int(diastolisch)}",
         ))
 
+    hba1c_text = answers.get("hba1c_wert", "")
+    hba1c_val = _extract_first_number(hba1c_text)
+    if hba1c_val is not None and hba1c_val >= 10:
+        flags.append(RedFlag(
+            rule_id="DM-RF-011",
+            description="HbA1c >= 10%: Stark unzureichende Stoffwechseleinstellung, aerztliche Pruefung dringend empfohlen.",
+            severity="critical",
+            triggered_by=f"hba1c={hba1c_val}",
+        ))
+    elif hba1c_val is not None and hba1c_val >= 8.5:
+        flags.append(RedFlag(
+            rule_id="DM-RF-012",
+            description="HbA1c >= 8.5%: Unzureichende Stoffwechseleinstellung, aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by=f"hba1c={hba1c_val}",
+        ))
+
+    gewichtsveraenderung_details = answers.get("gewichtsveraenderung_details", "").lower()
+    if _parse_ja_nein(answers.get("gewichtsveraenderung", "")):
+        if any(kw in gewichtsveraenderung_details for kw in ("abgenommen", "abnahme", "verlust", "verloren", "weniger")):
+            abnahme_wert = _extract_first_number(gewichtsveraenderung_details)
+            if abnahme_wert is not None and abnahme_wert >= 5:
+                flags.append(RedFlag(
+                    rule_id="DM-RF-013",
+                    description="Signifikanter Gewichtsverlust (>= 5 kg) bei Diabetes: Moeglicher Hinweis auf unkontrollierten Diabetes oder Begleiterkrankung.",
+                    severity="warning",
+                    triggered_by=f"gewichtsveraenderung_details={answers.get('gewichtsveraenderung_details', '')}",
+                ))
+
+    if _parse_ja_nein(answers.get("folgeerkrankungen_bekannt", "")):
+        folge_details = answers.get("folgeerkrankungen_details", "").lower()
+        if _parse_ja_nein(answers.get("hypo_hyper_hinweise", "")):
+            flags.append(RedFlag(
+                rule_id="DM-RF-014",
+                description="Bekannte Folgeerkrankungen bei gleichzeitigen Hypo-/Hyperglykämie-Hinweisen: Erhoehtes Risiko fuer Komplikationen.",
+                severity="critical",
+                triggered_by="folgeerkrankungen+hypo_hyper_hinweise",
+            ))
+        if any(kw in folge_details for kw in ("nephro", "niere", "dialyse")):
+            flags.append(RedFlag(
+                rule_id="DM-RF-015",
+                description="Diabetische Nephropathie bekannt: Blutdruck und Nierenfunktion aerztlich kontrollieren.",
+                severity="warning",
+                triggered_by=f"folgeerkrankungen_details={answers.get('folgeerkrankungen_details', '')}",
+            ))
+
+    medikamente = answers.get("medikamente", "").lower()
+    if any(kw in medikamente for kw in ("insulin", "sulfonylharnstoff", "glibenclamid", "glimepirid")):
+        if _parse_ja_nein(answers.get("hypo_hyper_hinweise", "")):
+            if any(kw in symptom_text for kw in ("zitter", "schweiss", "schwindel", "schwach")):
+                flags.append(RedFlag(
+                    rule_id="DM-RF-016",
+                    description="Hypoglykaemie-Symptome bei Insulin-/Sulfonylharnstoff-Therapie: Erhoehtes Risiko fuer schwere Unterzuckerung.",
+                    severity="critical",
+                    triggered_by="medikamente+hypo_symptome",
+                ))
+
+    return flags
+
+
+def check_cough(answers: dict[str, str], vitals: dict[str, int | float] | None = None) -> list[RedFlag]:
+    flags: list[RedFlag] = []
+
+    if _parse_ja_nein(answers.get("dyspnoe", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-001",
+            description="Atemnot bei akutem Husten: Pneumonie oder kardiopulmonale Ursache nicht auszuschliessen.",
+            severity="critical",
+            triggered_by="dyspnoe=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("blutbeimengung", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-002",
+            description="Haemoptysen (Blut im Auswurf): Sofortige aerztliche Abklaerung erforderlich.",
+            severity="critical",
+            triggered_by="blutbeimengung=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("fieber", "")):
+        severity = "warning"
+        if _parse_ja_nein(answers.get("dyspnoe", "")) or _parse_ja_nein(answers.get("thorakale_schmerzen", "")):
+            severity = "critical"
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-003",
+            description="Fieber oder Schuettelfrost bei akutem Husten: Infektioeses Geschehen, Pneumonie nicht auszuschliessen.",
+            severity=severity,
+            triggered_by="fieber=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("thorakale_schmerzen", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-004",
+            description="Thorakale Schmerzen bei akutem Husten: Pleuritis oder kardiopulmonale Ursache nicht auszuschliessen.",
+            severity="warning",
+            triggered_by="thorakale_schmerzen=ja",
+        ))
+
+    vorerkrankungen = answers.get("vorerkrankungen", "").lower()
+    relevante = ("copd", "asthma", "herzinsuffizienz", "immunsuppression", "immunschwaeche", "krebs", "tumor", "transplant")
+    if any(kw in vorerkrankungen for kw in relevante):
+        severity = "critical" if _parse_ja_nein(answers.get("fieber", "")) else "warning"
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-005",
+            description="Relevante Vorerkrankung bei akutem Husten: Erhoehtes Komplikationsrisiko, aerztliche Pruefung erforderlich.",
+            severity=severity,
+            triggered_by=f"vorerkrankungen={answers.get('vorerkrankungen', '')}",
+        ))
+
+    if _parse_ja_nein(answers.get("belastungsdyspnoe", "")) and not _parse_ja_nein(answers.get("dyspnoe", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-006",
+            description="Belastungsdyspnoe bei akutem Husten: Respiratorische Einschraenkung moeglich.",
+            severity="warning",
+            triggered_by="belastungsdyspnoe=ja",
+        ))
+
+    spo2 = vitals.get("spo2") if vitals else None
+    if spo2 is not None and spo2 < 92:
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-007",
+            description="SpO2 < 92%: Relevante Hypoxaemie, sofortige aerztliche Uebernahme erforderlich.",
+            severity="critical",
+            triggered_by=f"spo2={spo2}",
+        ))
+    elif spo2 is not None and spo2 < 95:
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-008",
+            description="SpO2 zwischen 92-94%: Leichte Hypoxaemie, aerztliche Pruefung empfohlen.",
+            severity="warning",
+            triggered_by=f"spo2={spo2}",
+        ))
+
+    auswurf = answers.get("auswurf_farbe", "").lower()
+    if any(kw in auswurf for kw in ("blutig", "blut", "rosafarben", "rostfarben")):
+        if not _parse_ja_nein(answers.get("blutbeimengung", "")):
+            flags.append(RedFlag(
+                rule_id="COUGH-RF-009",
+                description="Blutiger oder rostfarbener Auswurf: Haemoptysen moeglich, aerztliche Abklaerung erforderlich.",
+                severity="critical",
+                triggered_by=f"auswurf_farbe={answers.get('auswurf_farbe', '')}",
+            ))
+
     return flags
 
 
@@ -264,6 +538,8 @@ def _extract_first_number(value: str) -> float | None:
 
 
 def check(scenario: str, answers: dict[str, str], vitals: dict | None = None) -> list[RedFlag]:
+    if scenario == "cough":
+        return check_cough(answers, vitals)
     if scenario == "hypertension":
         return check_hypertension(answers, vitals)
     if scenario == "chest_pain":
