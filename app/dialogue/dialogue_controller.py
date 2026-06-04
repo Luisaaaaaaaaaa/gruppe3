@@ -139,12 +139,10 @@ class DialogueController:
         state = self._state_machine.state
 
         if state == DialogueState.EXPLAIN_ROLE:
-            self._display(ROLE_EXPLANATION)
             self._state_machine.advance()
             self._handle_state()
 
         elif state == DialogueState.REQUEST_CONSENT:
-            self._display(CONSENT_QUESTION)
             self._request_input(self._on_consent_answer)
 
         elif state == DialogueState.ANAMNESIS:
