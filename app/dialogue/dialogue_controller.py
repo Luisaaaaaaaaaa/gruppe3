@@ -396,6 +396,30 @@ class DialogueController:
         self._display("Vielen Dank fuer Ihre Angaben. Sie koennen das System nun schliessen.")
         self._state_machine.advance()
 
+    def get_questions_with_answers(self) -> list[tuple]:
+        return [
+            (q, self._answers.get(q.key, ""))
+            for q in self._questions
+        ]
+
+    def update_answers_and_regenerate(self, answers: dict[str, str]) -> None:
+        for q in self._questions:
+            value = answers.get(q.key, "").strip()
+            if q.required and not value:
+                raise ValueError(
+                    f"Die Frage '{q.text}' ist erforderlich."
+                )
+            self._answers[q.key] = value
+
+        self._red_flags = check(
+            scenario=self._scenario_id,
+            answers=self._answers,
+            vitals=self._vitals,
+        )
+
+        self._summary = None
+        self._build_and_export_summary()
+
     def _build_and_export_summary(self) -> None:
         if self._summary is not None:
             return

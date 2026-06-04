@@ -251,6 +251,7 @@ class BrowserSession:
     login_tone: str = "tone-info"
     messages: list[ChatEntry] = field(default_factory=list)
     pending_input: Callable[[str], None] | None = None
+    editing_answers: bool = False
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -263,6 +264,7 @@ class BrowserSession:
         self.login_tone = "tone-info"
         self.messages.clear()
         self.pending_input = None
+        self.editing_answers = False
 
     @property
     def has_active_dialogue(self) -> bool:
@@ -462,6 +464,8 @@ def main_page() -> None:
                         _render_login(session, refresh_ui)
                     elif session.stage == "scenario":
                         _render_scenario_selection(session, refresh_ui)
+                    elif session.editing_answers:
+                        _render_answer_editor(session, refresh_ui)
                     else:
                         _render_dialogue(session, refresh_ui)
 
@@ -834,10 +838,10 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                     cancel_button.disable()
 
     if session.summary_ready:
-        _render_summary(session)
+        _render_summary(session, refresh_ui)
 
 
-def _render_summary(session: BrowserSession) -> None:
+def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     if session.controller is None or session.controller.summary is None:
         return
 
@@ -888,6 +892,136 @@ def _render_summary(session: BrowserSession) -> None:
                 "Offene Punkte",
                 {f"Punkt {index + 1}": point for index, point in enumerate(summary.open_points)},
             )
+
+        with ui.row().classes("w-full justify-center gap-3 mt-6"):
+            ui.button(
+                "Antworten bearbeiten",
+                on_click=lambda: _start_editing(session, refresh_ui),
+            ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+
+
+def _start_editing(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.editing_answers = True
+    refresh_ui()
+
+
+def _render_answer_editor(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.controller is None:
+        return
+
+    questions_with_answers = session.controller.get_questions_with_answers()
+    edit_fields: dict[str, ui.radio | ui.input | ui.textarea] = {}
+
+    with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
+            ui.label("Antworten bearbeiten").classes("text-2xl font-semibold")
+            ui.label(
+                "Alle Fragen auf einen Blick. Aenderungen werden nach dem Speichern "
+                "in die Zusammenfassung uebernommen."
+            ).classes("text-[1rem] leading-7 text-slate-600")
+
+        for question, answer in questions_with_answers:
+            key = question.key
+            required = question.required
+            label = question.text
+            if required:
+                label = f"{label} *"
+
+            with ui.card().classes("surface-card w-full shadow-none"):
+                ui.label(label).classes(
+                    "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+                )
+
+                if question.input_type == "ja_nein":
+                    radio = ui.radio(
+                        ["ja", "nein"],
+                        value=answer if answer in ("ja", "nein") else None,
+                    ).props("inline")
+                    edit_fields[key] = radio
+                elif question.input_type == "zahl":
+                    inp = ui.input(
+                        value=answer,
+                        placeholder="Zahl eingeben oder 'unbekannt'",
+                    ).classes("w-full").props("outlined")
+                    edit_fields[key] = inp
+                else:
+                    ta = ui.textarea(
+                        value=answer,
+                        placeholder="Ihre Antwort",
+                    ).classes("w-full").props("outlined")
+                    edit_fields[key] = ta
+
+        def submit_edits() -> None:
+            collected: dict[str, str] = {}
+            errors: list[str] = []
+            required_questions = {
+                q.key: q for q, _ in questions_with_answers if q.required
+            }
+            q_text_map = {q.key: q.text for q, _ in questions_with_answers}
+
+            for key, field in edit_fields.items():
+                value = field.value
+                if value is None:
+                    value = ""
+                collected[key] = str(value).strip()
+
+            for key, question in required_questions.items():
+                if not collected.get(key, ""):
+                    errors.append(f"'{q_text_map[key]}' ist erforderlich.")
+
+            for key, value in collected.items():
+                for q, _ in questions_with_answers:
+                    if q.key == key and q.input_type == "ja_nein":
+                        if value and value not in ("ja", "nein"):
+                            errors.append(
+                                f"'{q_text_map[key]}' muss mit 'ja' oder 'nein' beantwortet werden."
+                            )
+                    elif q.key == key and q.input_type == "zahl":
+                        if value and value.lower() != "unbekannt":
+                            try:
+                                float(value.replace(",", "."))
+                            except ValueError:
+                                errors.append(
+                                    f"'{q_text_map[key]}' muss eine Zahl oder 'unbekannt' sein."
+                                )
+
+            if errors:
+                ui.notify(
+                    "Bitte korrigieren Sie folgende Fehler:\n" + "\n".join(errors),
+                    color="negative",
+                    multi_line=True,
+                )
+                return
+
+            try:
+                session.controller.update_answers_and_regenerate(collected)
+                session.editing_answers = False
+                refresh_ui()
+            except ValueError as exc:
+                ui.notify(str(exc), color="negative")
+
+        with ui.row().classes("w-full justify-end gap-3"):
+            ui.button(
+                "Abbrechen",
+                on_click=lambda: _cancel_editing(session, refresh_ui),
+            ).props("outline").classes(
+                "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+            )
+            ui.button(
+                "Speichern",
+                on_click=submit_edits,
+            ).props("unelevated").classes("bg-[#0f766e] text-white")
+
+
+def _cancel_editing(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.editing_answers = False
+    refresh_ui()
 
 
 def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
