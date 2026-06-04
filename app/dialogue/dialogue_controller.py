@@ -86,6 +86,12 @@ class DialogueController:
         return self._export_path
 
     @property
+    def current_question(self) -> AnamnesisQuestion | None:
+        if self._current_question_index < len(self._questions):
+            return self._questions[self._current_question_index]
+        return None
+
+    @property
     def asked_question_count(self) -> int:
         return self._asked_question_count
 

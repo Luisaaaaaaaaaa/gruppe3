@@ -362,6 +362,20 @@ def _handle_consent(
     refresh_ui()
 
 
+def _answer_yes_no(
+    session: BrowserSession, answer: str, refresh_ui: Callable[[], None]
+) -> None:
+    if session.pending_input is None:
+        return
+    session.messages.append(
+        ChatEntry(role="user", text=answer, tone="user")
+    )
+    callback = session.pending_input
+    session.pending_input = None
+    callback(answer)
+    refresh_ui()
+
+
 def _parse_birth_date(day: str, month: str, year: str) -> date:
     if not (day.isdigit() and month.isdigit() and year.isdigit()):
         raise ValueError(
@@ -649,53 +663,175 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                     ).props("outline").classes(
                         "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[160px]"
                     )
+
+        elif session.controller.state == DialogueState.ANAMNESIS:
+            current_q = session.controller.current_question
+            with ui.card().classes("surface-card w-full shadow-none"):
+                ui.label("Aktuelle Frage").classes("text-lg font-semibold")
+                if current_q:
+                    ui.label(current_q.text).classes(
+                        "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+                    )
+
+            is_yes_no = current_q is not None and current_q.input_type == "ja_nein"
+            if is_yes_no:
+                with ui.row().classes("w-full gap-3 justify-center mt-2"):
+                    ui.button(
+                        "Ja",
+                        on_click=lambda: _answer_yes_no(session, "ja", refresh_ui),
+                    ).props("unelevated").classes(
+                        "bg-[#0f766e] text-white min-w-[120px]"
+                    )
+                    ui.button(
+                        "Nein",
+                        on_click=lambda: _answer_yes_no(session, "nein", refresh_ui),
+                    ).props("outline").classes(
+                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[120px]"
+                    )
+
+                def cancel_yes_no_an() -> None:
+                    if session.pending_input is None:
+                        return
+                    session.messages.append(
+                        ChatEntry(role="user", text="abbrechen", tone="user")
+                    )
+                    callback = session.pending_input
+                    session.pending_input = None
+                    callback("abbrechen")
+                    refresh_ui()
+
+                with ui.row().classes("w-full justify-center mt-2"):
+                    ui.button(
+                        "Abbrechen", on_click=cancel_yes_no_an
+                    ).props("outline dense").classes(
+                        "text-xs border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+                    )
+            else:
+                def submit_answer_an() -> None:
+                    if session.pending_input is None:
+                        return
+
+                    answer = (answer_input_an.value or "").strip()
+                    session.messages.append(
+                        ChatEntry(
+                            role="user",
+                            text=answer or "(keine Angabe)",
+                            tone="user",
+                        )
+                    )
+                    callback = session.pending_input
+                    session.pending_input = None
+                    answer_input_an.value = ""
+                    callback(answer)
+                    refresh_ui()
+
+                def cancel_dialogue_an() -> None:
+                    if session.pending_input is None:
+                        return
+                    answer_input_an.value = "abbrechen"
+                    submit_answer_an()
+
+                answer_input_an = ui.input("Ihre Antwort").props("outlined").classes("w-full")
+                answer_input_an.on("keydown.enter", lambda _: submit_answer_an())
+
+                with ui.row().classes("w-full justify-end gap-3"):
+                    cancel_button_an = ui.button(
+                        "Abbrechen", on_click=cancel_dialogue_an
+                    ).props("outline").classes(
+                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+                    )
+                    send_button_an = ui.button("Senden", on_click=submit_answer_an).props(
+                        "unelevated"
+                    ).classes("bg-[#0f766e] text-white")
+
+                if session.pending_input is None:
+                    answer_input_an.disable()
+                    send_button_an.disable()
+                    cancel_button_an.disable()
+
         else:
             with ui.scroll_area().classes("chat-shell w-full rounded-3xl bg-white/45 p-4"):
                 with ui.column().classes("w-full gap-3"):
                     for entry in session.messages:
                         _render_message(entry)
 
-            def submit_answer() -> None:
-                if session.pending_input is None:
-                    return
+            current_q = session.controller.current_question
+            is_yes_no = current_q is not None and current_q.input_type == "ja_nein"
 
-                answer = (answer_input.value or "").strip()
-                session.messages.append(
-                    ChatEntry(
-                        role="user",
-                        text=answer or "(keine Angabe)",
-                        tone="user",
+            if is_yes_no:
+                with ui.row().classes("w-full gap-3 justify-center mt-2"):
+                    ui.button(
+                        "Ja",
+                        on_click=lambda: _answer_yes_no(session, "ja", refresh_ui),
+                    ).props("unelevated").classes(
+                        "bg-[#0f766e] text-white min-w-[120px]"
                     )
-                )
-                callback = session.pending_input
-                session.pending_input = None
-                answer_input.value = ""
-                callback(answer)
-                refresh_ui()
+                    ui.button(
+                        "Nein",
+                        on_click=lambda: _answer_yes_no(session, "nein", refresh_ui),
+                    ).props("outline").classes(
+                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[120px]"
+                    )
 
-            def cancel_dialogue() -> None:
+                def cancel_yes_no() -> None:
+                    if session.pending_input is None:
+                        return
+                    session.messages.append(
+                        ChatEntry(role="user", text="abbrechen", tone="user")
+                    )
+                    callback = session.pending_input
+                    session.pending_input = None
+                    callback("abbrechen")
+                    refresh_ui()
+
+                with ui.row().classes("w-full justify-center mt-2"):
+                    ui.button(
+                        "Abbrechen", on_click=cancel_yes_no
+                    ).props("outline dense").classes(
+                        "text-xs border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+                    )
+            else:
+                def submit_answer() -> None:
+                    if session.pending_input is None:
+                        return
+
+                    answer = (answer_input.value or "").strip()
+                    session.messages.append(
+                        ChatEntry(
+                            role="user",
+                            text=answer or "(keine Angabe)",
+                            tone="user",
+                        )
+                    )
+                    callback = session.pending_input
+                    session.pending_input = None
+                    answer_input.value = ""
+                    callback(answer)
+                    refresh_ui()
+
+                def cancel_dialogue() -> None:
+                    if session.pending_input is None:
+                        return
+                    answer_input.value = "abbrechen"
+                    submit_answer()
+
+                answer_input = ui.input("Ihre Antwort").props("outlined").classes("w-full")
+                answer_input.on("keydown.enter", lambda _: submit_answer())
+
+                with ui.row().classes("w-full justify-end gap-3"):
+                    cancel_button = ui.button(
+                        "Abbrechen", on_click=cancel_dialogue
+                    ).props("outline").classes(
+                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+                    )
+                    send_button = ui.button("Senden", on_click=submit_answer).props(
+                        "unelevated"
+                    ).classes("bg-[#0f766e] text-white")
+
                 if session.pending_input is None:
-                    return
-                answer_input.value = "abbrechen"
-                submit_answer()
-
-            answer_input = ui.input("Ihre Antwort").props("outlined").classes("w-full")
-            answer_input.on("keydown.enter", lambda _: submit_answer())
-
-            with ui.row().classes("w-full justify-end gap-3"):
-                cancel_button = ui.button(
-                    "Abbrechen", on_click=cancel_dialogue
-                ).props("outline").classes(
-                    "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
-                )
-                send_button = ui.button("Senden", on_click=submit_answer).props(
-                    "unelevated"
-                ).classes("bg-[#0f766e] text-white")
-
-            if session.pending_input is None:
-                answer_input.disable()
-                send_button.disable()
-                cancel_button.disable()
+                    answer_input.disable()
+                    send_button.disable()
+                    cancel_button.disable()
 
     if session.summary_ready:
         _render_summary(session)
