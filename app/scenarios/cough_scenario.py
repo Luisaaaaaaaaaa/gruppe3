@@ -24,6 +24,11 @@ QUESTIONS: list[AnamnesisQuestion] = [
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
+        key="korpertemperatur",
+        text="Welche K\u00f6rpertemperatur haben Sie genau? (z.B. 38,5 \u00b0C, oder sagen Sie 'nicht gemessen')",
+        input_type="freitext",
+    ),
+    AnamnesisQuestion(
         key="dyspnoe",
         text="Haben Sie Atemnot oder Kurzatmigkeit?",
         input_type="ja_nein",

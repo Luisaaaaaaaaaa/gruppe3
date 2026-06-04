@@ -203,10 +203,16 @@ class DialogueController:
         self._handle_state()
 
     def _should_ask_question(self, question: AnamnesisQuestion) -> bool:
-        if self._scenario_id != "diabetes":
+        if self._scenario_id == "cough":
+            if question.key == "korpertemperatur":
+                fieber_antwort = self._answers.get("fieber", "").strip().lower()
+                return fieber_antwort in ("ja", "j", "yes", "y")
             return True
 
-        return should_ask_follow_up(question.key, self._answers)
+        if self._scenario_id == "diabetes":
+            return should_ask_follow_up(question.key, self._answers)
+
+        return True
 
     def _on_anamnesis_answer(self, answer: str) -> None:
         if answer.strip().lower() == "abbrechen":
