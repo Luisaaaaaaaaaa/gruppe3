@@ -206,17 +206,23 @@ class DialogueController:
         self._state_machine.advance()
         self._handle_state()
 
-    def _should_ask_question(self, question: AnamnesisQuestion) -> bool:
+    def is_question_visible(self, question_key: str, answers: dict[str, str] | None = None) -> bool:
+        if answers is None:
+            answers = self._answers
+
         if self._scenario_id == "cough":
-            if question.key == "korpertemperatur":
-                fieber_antwort = self._answers.get("fieber", "").strip().lower()
+            if question_key == "korpertemperatur":
+                fieber_antwort = answers.get("fieber", "").strip().lower()
                 return fieber_antwort in ("ja", "j", "yes", "y")
             return True
 
         if self._scenario_id == "diabetes":
-            return should_ask_follow_up(question.key, self._answers)
+            return should_ask_follow_up(question_key, answers)
 
         return True
+
+    def _should_ask_question(self, question: AnamnesisQuestion) -> bool:
+        return self.is_question_visible(question.key)
 
     def _on_anamnesis_answer(self, answer: str) -> None:
         if answer.strip().lower() == "abbrechen":
@@ -248,6 +254,24 @@ class DialogueController:
         log_answer(question.key, answer.strip())
         self._current_question_index += 1
         self._ask_next_question()
+
+    def submit_mass_anamnesis(self, answers: dict[str, str]) -> None:
+        for q in self._questions:
+            value = answers.get(q.key, "").strip()
+            if q.required and self.is_question_visible(q.key, answers) and not value:
+                raise ValueError(
+                    f"Die Frage '{q.text}' ist erforderlich."
+                )
+            self._answers[q.key] = value
+
+        self._current_question_index = len(self._questions)
+        self._asked_question_count = sum(
+            1 for q in self._questions
+            if self.is_question_visible(q.key, self._answers)
+        )
+
+        self._state_machine.advance()
+        self._handle_state()
 
     def _measure_vitals(self) -> None:
         log_state_change("ANAMNESIS", "VITAL_PARAMETERS")

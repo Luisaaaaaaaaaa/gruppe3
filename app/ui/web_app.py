@@ -624,23 +624,6 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                     f"Patient: {_format_patient_name(session.current_patient)}"
                 ).classes("text-[1rem] text-slate-600")
 
-            if session.controller.state == DialogueState.ANAMNESIS:
-                current_question, total_questions = session.controller.question_progress
-                with ui.card().classes("shadow-none border border-[rgba(15,118,110,0.12)]"):
-                    ui.label("Fragenfortschritt").classes("summary-label")
-                    ui.label(
-                        f"Frage {current_question} von {total_questions}"
-                    ).classes("text-lg font-semibold")
-                    progress_value = (
-                        current_question / total_questions if total_questions else 0
-                    )
-                    ui.linear_progress(value=progress_value).classes("w-48")
-                    pct = round(progress_value * 100)
-                    ui.label(f"{pct}%").classes("text-sm text-slate-500")
-                    ui.label(
-                        "Die Anzeige passt sich an optionale Folgefragen im Verlauf an."
-                    ).classes("text-xs text-slate-500")
-
         if session.controller.state in (
             DialogueState.EXPLAIN_ROLE,
             DialogueState.REQUEST_CONSENT,
@@ -669,89 +652,7 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                     )
 
         elif session.controller.state == DialogueState.ANAMNESIS:
-            current_q = session.controller.current_question
-            with ui.card().classes("surface-card w-full shadow-none"):
-                ui.label("Aktuelle Frage").classes("text-lg font-semibold")
-                if current_q:
-                    ui.label(current_q.text).classes(
-                        "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
-                    )
-
-            is_yes_no = current_q is not None and current_q.input_type == "ja_nein"
-            if is_yes_no:
-                with ui.row().classes("w-full gap-3 justify-center mt-2"):
-                    ui.button(
-                        "Ja",
-                        on_click=lambda: _answer_yes_no(session, "ja", refresh_ui),
-                    ).props("unelevated").classes(
-                        "bg-[#0f766e] text-white min-w-[120px]"
-                    )
-                    ui.button(
-                        "Nein",
-                        on_click=lambda: _answer_yes_no(session, "nein", refresh_ui),
-                    ).props("outline").classes(
-                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[120px]"
-                    )
-
-                def cancel_yes_no_an() -> None:
-                    if session.pending_input is None:
-                        return
-                    session.messages.append(
-                        ChatEntry(role="user", text="abbrechen", tone="user")
-                    )
-                    callback = session.pending_input
-                    session.pending_input = None
-                    callback("abbrechen")
-                    refresh_ui()
-
-                with ui.row().classes("w-full justify-center mt-2"):
-                    ui.button(
-                        "Abbrechen", on_click=cancel_yes_no_an
-                    ).props("outline dense").classes(
-                        "text-xs border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
-                    )
-            else:
-                def submit_answer_an() -> None:
-                    if session.pending_input is None:
-                        return
-
-                    answer = (answer_input_an.value or "").strip()
-                    session.messages.append(
-                        ChatEntry(
-                            role="user",
-                            text=answer or "(keine Angabe)",
-                            tone="user",
-                        )
-                    )
-                    callback = session.pending_input
-                    session.pending_input = None
-                    answer_input_an.value = ""
-                    callback(answer)
-                    refresh_ui()
-
-                def cancel_dialogue_an() -> None:
-                    if session.pending_input is None:
-                        return
-                    answer_input_an.value = "abbrechen"
-                    submit_answer_an()
-
-                answer_input_an = ui.input("Ihre Antwort").props("outlined").classes("w-full")
-                answer_input_an.on("keydown.enter", lambda _: submit_answer_an())
-
-                with ui.row().classes("w-full justify-end gap-3"):
-                    cancel_button_an = ui.button(
-                        "Abbrechen", on_click=cancel_dialogue_an
-                    ).props("outline").classes(
-                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
-                    )
-                    send_button_an = ui.button("Senden", on_click=submit_answer_an).props(
-                        "unelevated"
-                    ).classes("bg-[#0f766e] text-white")
-
-                if session.pending_input is None:
-                    answer_input_an.disable()
-                    send_button_an.disable()
-                    cancel_button_an.disable()
+            _render_mass_anamnesis(session, refresh_ui)
 
         else:
             with ui.scroll_area().classes("chat-shell w-full rounded-3xl bg-white/45 p-4"):
@@ -907,31 +808,48 @@ def _start_editing(
     refresh_ui()
 
 
-def _render_answer_editor(
-    session: BrowserSession, refresh_ui: Callable[[], None]
+def _build_question_form(
+    controller: DialogueController,
+    questions_with_answers: list[tuple],
+    title: str,
+    description: str,
+    submit_label: str,
+    submit_callback: Callable[[dict[str, str]], None],
+    cancel_callback: Callable[[], None],
+    live_visibility: bool = True,
 ) -> None:
-    if session.controller is None:
+    if controller is None:
         return
 
-    questions_with_answers = session.controller.get_questions_with_answers()
-    edit_fields: dict[str, ui.radio | ui.input | ui.textarea] = {}
+    containers: dict[str, ui.card] = {}
+    fields: dict[str, ui.radio | ui.input | ui.textarea] = {}
+    q_text_map: dict[str, str] = {q.key: q.text for q, _ in questions_with_answers}
+    input_types: dict[str, str] = {q.key: q.input_type for q, _ in questions_with_answers}
+    required_keys: set[str] = {q.key for q, _ in questions_with_answers if q.required}
+
+    def _make_radio_handler(key: str):
+        def _handler(e) -> None:
+            if live_visibility:
+                for q, _ in questions_with_answers:
+                    if q.key in containers:
+                        containers[q.key].visible = controller.is_question_visible(
+                            q.key, {k: (f.value if hasattr(f, 'value') else f) for k, f in fields.items()}
+                        )
+        return _handler
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
-            ui.label("Antworten bearbeiten").classes("text-2xl font-semibold")
-            ui.label(
-                "Alle Fragen auf einen Blick. Aenderungen werden nach dem Speichern "
-                "in die Zusammenfassung uebernommen."
-            ).classes("text-[1rem] leading-7 text-slate-600")
+            ui.label(title).classes("text-2xl font-semibold")
+            ui.label(description).classes("text-[1rem] leading-7 text-slate-600")
 
         for question, answer in questions_with_answers:
             key = question.key
-            required = question.required
             label = question.text
-            if required:
+            if key in required_keys:
                 label = f"{label} *"
 
-            with ui.card().classes("surface-card w-full shadow-none"):
+            with ui.card().classes("surface-card w-full shadow-none") as card:
+                containers[key] = card
                 ui.label(label).classes(
                     "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
                 )
@@ -941,54 +859,64 @@ def _render_answer_editor(
                         ["ja", "nein"],
                         value=answer if answer in ("ja", "nein") else None,
                     ).props("inline")
-                    edit_fields[key] = radio
+                    radio.on("update:model-value", _make_radio_handler(key))
+                    fields[key] = radio
                 elif question.input_type == "zahl":
                     inp = ui.input(
                         value=answer,
                         placeholder="Zahl eingeben oder 'unbekannt'",
                     ).classes("w-full").props("outlined")
-                    edit_fields[key] = inp
+                    fields[key] = inp
                 else:
                     ta = ui.textarea(
                         value=answer,
                         placeholder="Ihre Antwort",
                     ).classes("w-full").props("outlined")
-                    edit_fields[key] = ta
+                    fields[key] = ta
 
-        def submit_edits() -> None:
+        if live_visibility:
+            for q, _ in questions_with_answers:
+                if q.key in containers:
+                    collected_now = {
+                        k: (str(f.value).strip() if f.value is not None else "")
+                        for k, f in fields.items()
+                    }
+                    containers[q.key].visible = controller.is_question_visible(
+                        q.key, collected_now
+                    )
+
+        def _collect_and_validate() -> list[str]:
             collected: dict[str, str] = {}
             errors: list[str] = []
-            required_questions = {
-                q.key: q for q, _ in questions_with_answers if q.required
-            }
-            q_text_map = {q.key: q.text for q, _ in questions_with_answers}
 
-            for key, field in edit_fields.items():
+            for key, field in fields.items():
                 value = field.value
                 if value is None:
                     value = ""
                 collected[key] = str(value).strip()
 
-            for key, question in required_questions.items():
-                if not collected.get(key, ""):
-                    errors.append(f"'{q_text_map[key]}' ist erforderlich.")
+            for key in required_keys:
+                if not collected.get(key, "") and controller.is_question_visible(key, collected):
+                    errors.append(f"'{q_text_map[key]}' ist erforderlich und wurde nicht ausgefuellt.")
 
             for key, value in collected.items():
-                for q, _ in questions_with_answers:
-                    if q.key == key and q.input_type == "ja_nein":
-                        if value and value not in ("ja", "nein"):
-                            errors.append(
-                                f"'{q_text_map[key]}' muss mit 'ja' oder 'nein' beantwortet werden."
-                            )
-                    elif q.key == key and q.input_type == "zahl":
-                        if value and value.lower() != "unbekannt":
-                            try:
-                                float(value.replace(",", "."))
-                            except ValueError:
-                                errors.append(
-                                    f"'{q_text_map[key]}' muss eine Zahl oder 'unbekannt' sein."
-                                )
+                it = input_types.get(key)
+                if it == "ja_nein" and value and value not in ("ja", "nein"):
+                    errors.append(
+                        f"'{q_text_map[key]}' muss mit 'ja' oder 'nein' beantwortet werden."
+                    )
+                elif it == "zahl" and value and value.lower() != "unbekannt":
+                    try:
+                        float(value.replace(",", "."))
+                    except ValueError:
+                        errors.append(
+                            f"'{q_text_map[key]}' muss eine Zahl oder 'unbekannt' sein."
+                        )
 
+            return errors
+
+        def _on_submit() -> None:
+            errors = _collect_and_validate()
             if errors:
                 ui.notify(
                     "Bitte korrigieren Sie folgende Fehler:\n" + "\n".join(errors),
@@ -996,25 +924,89 @@ def _render_answer_editor(
                     multi_line=True,
                 )
                 return
-
-            try:
-                session.controller.update_answers_and_regenerate(collected)
-                session.editing_answers = False
-                refresh_ui()
-            except ValueError as exc:
-                ui.notify(str(exc), color="negative")
+            collected = {
+                k: (str(f.value).strip() if f.value is not None else "")
+                for k, f in fields.items()
+            }
+            submit_callback(collected)
 
         with ui.row().classes("w-full justify-end gap-3"):
             ui.button(
-                "Abbrechen",
-                on_click=lambda: _cancel_editing(session, refresh_ui),
+                "Abbrechen", on_click=cancel_callback
             ).props("outline").classes(
                 "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
             )
             ui.button(
-                "Speichern",
-                on_click=submit_edits,
+                submit_label, on_click=_on_submit
             ).props("unelevated").classes("bg-[#0f766e] text-white")
+
+
+def _render_mass_anamnesis(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.controller is None:
+        return
+
+    questions_with_answers = session.controller.get_questions_with_answers()
+
+    def _on_submit(answers: dict[str, str]) -> None:
+        try:
+            session.controller.submit_mass_anamnesis(answers)
+            refresh_ui()
+        except ValueError as exc:
+            ui.notify(str(exc), color="negative")
+
+    def _on_cancel() -> None:
+        session.controller._display("Die Anamnese wurde abgebrochen.")
+        session.controller._state_machine.jump_to(
+            DialogueState.END  # type: ignore[attr-defined]
+        )
+        refresh_ui()
+
+    _build_question_form(
+        controller=session.controller,
+        questions_with_answers=questions_with_answers,
+        title="Anamnese",
+        description=(
+            "Alle Fragen auf einen Blick. Pflichtfelder sind mit * markiert. "
+            "Einige Fragen werden dynamisch ein- oder ausgeblendet."
+        ),
+        submit_label="Absenden",
+        submit_callback=_on_submit,
+        cancel_callback=_on_cancel,
+        live_visibility=True,
+    )
+
+
+def _render_answer_editor(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.controller is None:
+        return
+
+    questions_with_answers = session.controller.get_questions_with_answers()
+
+    def _on_submit(answers: dict[str, str]) -> None:
+        try:
+            session.controller.update_answers_and_regenerate(answers)
+            session.editing_answers = False
+            refresh_ui()
+        except ValueError as exc:
+            ui.notify(str(exc), color="negative")
+
+    _build_question_form(
+        controller=session.controller,
+        questions_with_answers=questions_with_answers,
+        title="Antworten bearbeiten",
+        description=(
+            "Alle Fragen auf einen Blick. Aenderungen werden nach dem Speichern "
+            "in die Zusammenfassung uebernommen."
+        ),
+        submit_label="Speichern",
+        submit_callback=_on_submit,
+        cancel_callback=lambda: _cancel_editing(session, refresh_ui),
+        live_visibility=True,
+    )
 
 
 def _cancel_editing(
@@ -1058,21 +1050,6 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         ui.label("Prozess").classes("eyebrow")
         for label, status in _get_process_steps(session):
             ui.label(label).classes(f"status-chip status-chip--{status} w-fit")
-
-    if session.controller is not None and session.controller.state == DialogueState.ANAMNESIS:
-        with ui.card().classes("surface-card w-full shadow-none"):
-            current_question, total_questions = session.controller.question_progress
-            ui.label("Anamnese-Fortschritt").classes("eyebrow")
-            ui.label(f"{current_question} von {total_questions} Fragen").classes(
-                "text-xl font-semibold"
-            )
-            progress_value = current_question / total_questions if total_questions else 0
-            ui.linear_progress(value=progress_value).classes("w-full")
-            pct = round(progress_value * 100)
-            ui.label(f"{pct}%").classes("text-sm leading-6 text-slate-600")
-            ui.label(
-                f"Bereits angezeigte Fragen: {session.controller.asked_question_count}"
-            ).classes("text-sm leading-6 text-slate-600")
 
     if session.controller is not None and session.controller.export_path is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
