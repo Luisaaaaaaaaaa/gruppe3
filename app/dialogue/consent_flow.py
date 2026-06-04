@@ -1,5 +1,5 @@
 ROLE_EXPLANATION = (
-    "Willkommen. Dieses System ist ein digitales Assistenzsystem zur "
+    "Herzlich Willkommen. Dieses System ist ein digitales, KI-gestütztes Assistenzsystem zur "
     "strukturierten Erhebung von Gesundheitsinformationen.\n\n"
     "Wichtige Hinweise:\n"
     "- Das System stellt keine Diagnosen.\n"
@@ -13,17 +13,16 @@ ROLE_EXPLANATION = (
 
 CONSENT_QUESTION = (
     "Moechten Sie mit der assistierten Anamnese fortfahren?\n"
-    "Bitte antworten Sie mit 'ja' oder 'nein'."
 )
 
 CONSENT_DECLINED = (
     "Sie haben die assistierte Anamnese abgelehnt. "
-    "Bitte wenden Sie sich direkt an das Praxispersonal."
+    "Bitte wenden Sie sich an das Praxispersonal."
 )
 
 CONSENT_ACCEPTED = (
     "Vielen Dank. Die assistierte Anamnese beginnt nun. "
-    "Sie koennen jederzeit 'abbrechen' eingeben, um den Vorgang zu beenden."
+    "Sie koennen jederzeit 'Abbrechen' eingeben oder auf den Abbrechen-Button klicken, um die Anamnese zu beenden."
 )
 
 
