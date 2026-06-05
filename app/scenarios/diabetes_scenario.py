@@ -39,7 +39,10 @@ QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion(
         key="gewicht_aktuell",
         text="Wie viel wiegen Sie aktuell in kg? Falls unbekannt, 'unbekannt' eingeben.",
-        input_type="freitext",
+        input_type="zahl",
+        slider_min=30,
+        slider_max=300,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="gewichtsveraenderung",
@@ -56,11 +59,17 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="blutdruck_systolisch",
         text="Wie hoch war Ihr letzter systolischer Blutdruckwert (oberer Wert), falls bekannt? Falls unbekannt, 'unbekannt' eingeben.",
         input_type="zahl",
+        slider_min=80,
+        slider_max=250,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="blutdruck_diastolisch",
         text="Wie hoch war Ihr letzter diastolischer Blutdruckwert (unterer Wert), falls bekannt? Falls unbekannt, 'unbekannt' eingeben.",
         input_type="zahl",
+        slider_min=40,
+        slider_max=150,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="lebensstil",

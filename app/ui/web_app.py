@@ -275,6 +275,21 @@ class BrowserSession:
         return self.controller is not None and self.controller.summary is not None
 
 
+@dataclass
+class _SliderField:
+    slider: ui.slider
+    unknown_checkbox: ui.checkbox
+    min_val: float
+    max_val: float
+    step: float
+
+    @property
+    def value(self) -> str:
+        if self.unknown_checkbox.value:
+            return "unbekannt"
+        return str(int(self.slider.value))
+
+
 def _classify_message(text: str) -> str:
     normalized = text.upper()
     if "ESKALATION" in normalized or "ACHTUNG" in normalized:
@@ -822,7 +837,7 @@ def _build_question_form(
         return
 
     containers: dict[str, ui.card] = {}
-    fields: dict[str, ui.radio | ui.input | ui.textarea] = {}
+    fields: dict[str, object] = {}
     q_text_map: dict[str, str] = {q.key: q.text for q, _ in questions_with_answers}
     input_types: dict[str, str] = {q.key: q.input_type for q, _ in questions_with_answers}
     required_keys: set[str] = {q.key for q, _ in questions_with_answers if q.required}
@@ -862,11 +877,53 @@ def _build_question_form(
                     radio.on("update:model-value", _make_radio_handler(key))
                     fields[key] = radio
                 elif question.input_type == "zahl":
-                    inp = ui.input(
-                        value=answer,
-                        placeholder="Zahl eingeben oder 'unbekannt'",
-                    ).classes("w-full").props("outlined")
-                    fields[key] = inp
+                    has_slider = (
+                        question.slider_min is not None
+                        and question.slider_max is not None
+                    )
+                    if has_slider:
+                        min_val = float(question.slider_min)
+                        max_val = float(question.slider_max)
+                        step = float(question.slider_step or 1)
+
+                        try:
+                            init_val = float(answer.replace(",", "."))
+                        except (ValueError, AttributeError):
+                            init_val = min_val
+
+                        init_val = max(min_val, min(max_val, init_val))
+
+                        with ui.column().classes("w-full gap-1"):
+                            slider = ui.slider(
+                                min=min_val, max=max_val, step=step, value=init_val
+                            ).classes("w-full")
+                            value_label = ui.label(f"Wert: {int(init_val)}").classes(
+                                "text-sm font-medium text-center"
+                            )
+                            slider.on(
+                                "update:model-value",
+                                lambda e, lbl=value_label: lbl.set_text(
+                                    f"Wert: {int(float(e.args))}"
+                                ),
+                            )
+
+                            unknown_checkbox = ui.checkbox("unbekannt")
+                            unknown_checkbox.on(
+                                "update:model-value",
+                                lambda e, s=slider: (
+                                    s.disable() if e.args else s.enable()
+                                ),
+                            )
+
+                        fields[key] = _SliderField(
+                            slider, unknown_checkbox, min_val, max_val, step
+                        )
+                    else:
+                        inp = ui.input(
+                            value=answer,
+                            placeholder="Zahl eingeben oder 'unbekannt'",
+                        ).classes("w-full").props("outlined")
+                        fields[key] = inp
                 else:
                     ta = ui.textarea(
                         value=answer,

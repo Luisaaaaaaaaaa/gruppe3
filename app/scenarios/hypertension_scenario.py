@@ -7,6 +7,9 @@ class AnamnesisQuestion:
     text: str
     required: bool = True
     input_type: str = "freitext"  # freitext, ja_nein, zahl
+    slider_min: float | None = None
+    slider_max: float | None = None
+    slider_step: float | None = None
 
 
 SCENARIO_KEY = "hypertension"
@@ -17,16 +20,25 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="blutdruck_systolisch",
         text="Wie hoch war Ihr letzter gemessener Blutdruck (systolischer Wert, oberer Wert)?",
         input_type="zahl",
+        slider_min=80,
+        slider_max=250,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="blutdruck_diastolisch",
         text="Und der untere Wert (diastolisch)?",
         input_type="zahl",
+        slider_min=40,
+        slider_max=150,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="puls",
         text="Kennen Sie Ihren aktuellen Puls (Schlaege pro Minute)? Falls unbekannt, 'unbekannt' eingeben.",
-        input_type="freitext",
+        input_type="zahl",
+        slider_min=50,
+        slider_max=250,
+        slider_step=1,
     ),
     AnamnesisQuestion(
         key="messbedingungen",
@@ -86,6 +98,9 @@ QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion(
         key="gewicht",
         text="Wie viel wiegen Sie aktuell (in kg)? Falls unbekannt, 'unbekannt' eingeben.",
-        input_type="freitext",
+        input_type="zahl",
+        slider_min=30,
+        slider_max=300,
+        slider_step=1,
     ),
 ]
