@@ -252,6 +252,7 @@ class BrowserSession:
     messages: list[ChatEntry] = field(default_factory=list)
     pending_input: Callable[[str], None] | None = None
     editing_answers: bool = False
+    show_cancel_dialog: bool = False
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -265,6 +266,7 @@ class BrowserSession:
         self.messages.clear()
         self.pending_input = None
         self.editing_answers = False
+        self.show_cancel_dialog = False
 
     @property
     def has_active_dialogue(self) -> bool:
@@ -484,6 +486,8 @@ def main_page() -> None:
                     else:
                         _render_dialogue(session, refresh_ui)
 
+                    _render_cancel_overlay(session, refresh_ui)
+
                 render_main()
 
             with ui.column().classes("w-full gap-6 lg:max-w-[340px]"):
@@ -492,7 +496,6 @@ def main_page() -> None:
                     _render_sidebar(session, refresh_ui)
 
                 render_sidebar()
-
 
 def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
@@ -998,6 +1001,61 @@ def _build_question_form(
             ).props("unelevated").classes("bg-[#0f766e] text-white")
 
 
+def _render_cancel_overlay(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if not session.show_cancel_dialog or session.controller is None:
+        return
+
+    with ui.element("div").classes("fixed inset-0 bg-black/40 z-50"):
+        with ui.card().classes(
+            "surface-card shadow-none border-2 border-[#9f1d20]"
+        ).style(
+            "position: fixed; top: 50%; left: 50%; "
+            "transform: translate(-50%, -50%); z-index: 51;"
+        ):
+            ui.label("Abbrechen best\u00e4tigen").classes("text-lg font-semibold")
+            ui.label(
+                "Sind Sie sicher, dass Sie die Anamnese beenden wollen?\n"
+                "Alle nicht gespeicherten Angaben gehen verloren."
+            ).classes(
+                "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+            )
+            with ui.row().classes("w-full gap-3 justify-center mt-4"):
+                ui.button(
+                    "Ja, abbrechen",
+                    on_click=lambda: _confirm_cancel_anamnesis(session, refresh_ui),
+                ).props("unelevated").classes(
+                    "bg-[#9f1d20] text-white min-w-[140px]"
+                )
+                ui.button(
+                    "Nein, weiter",
+                    on_click=lambda: _dismiss_cancel_dialog(session, refresh_ui),
+                ).props("outline").classes(
+                    "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[140px]"
+                )
+
+
+def _confirm_cancel_anamnesis(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.controller is None:
+        return
+    session.show_cancel_dialog = False
+    session.controller = None
+    session.messages.clear()
+    session.pending_input = None
+    session.stage = "scenario"
+    refresh_ui()
+
+
+def _dismiss_cancel_dialog(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.show_cancel_dialog = False
+    refresh_ui()
+
+
 def _render_mass_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -1014,10 +1072,7 @@ def _render_mass_anamnesis(
             ui.notify(str(exc), color="negative")
 
     def _on_cancel() -> None:
-        session.controller._display("Die Anamnese wurde abgebrochen.")
-        session.controller._state_machine.jump_to(
-            DialogueState.END  # type: ignore[attr-defined]
-        )
+        session.show_cancel_dialog = True
         refresh_ui()
 
     _build_question_form(
