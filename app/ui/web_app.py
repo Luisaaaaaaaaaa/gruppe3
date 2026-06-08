@@ -188,6 +188,24 @@ STYLE_BLOCK = """
         font-size: 0.98rem;
         line-height: 1.45;
     }
+
+    @keyframes pulse-avatar {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.08); }
+    }
+
+    .avatar-bounce {
+        animation: pulse-avatar 2s ease-in-out infinite;
+        transition: transform 0.2s ease;
+    }
+    .avatar-bounce:active {
+        transform: scale(1.3) !important;
+        animation: none;
+    }
+
+    @media (max-width: 767px) {
+        .avatar-container { display: none !important; }
+    }
 </style>
 """
 
@@ -255,6 +273,7 @@ class BrowserSession:
     editing_answers: bool = False
     show_cancel_dialog: bool = False
     login_blocked_until: float | None = None
+    avatar_messages: list[ChatEntry] = field(default_factory=list)
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -270,6 +289,7 @@ class BrowserSession:
         self.editing_answers = False
         self.show_cancel_dialog = False
         self.login_blocked_until = None
+        self.avatar_messages.clear()
 
     @property
     def has_active_dialogue(self) -> bool:
@@ -1098,6 +1118,48 @@ def _render_login_blocked_overlay(
     ui.timer(1, once=True, callback=refresh_ui)
 
 
+def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    if session.controller is None:
+        return
+    if session.controller.state != DialogueState.ANAMNESIS:
+        return
+
+    with ui.card().classes("surface-card w-full shadow-none avatar-container"):
+        with ui.row().classes("w-full items-center gap-4"):
+            ui.label("\U0001fa7a").classes("avatar-bounce").style(
+                "font-size: 40px; line-height: 1; cursor: pointer;"
+            ).on("click", lambda: _on_avatar_click())
+            with ui.column().classes("gap-0"):
+                ui.label("Arzt-Assistent").classes("text-sm font-semibold")
+                ui.label("Ich helfe Ihnen gern.").classes(
+                    "text-xs text-slate-500"
+                )
+
+        if not session.avatar_messages:
+            session.avatar_messages.append(
+                ChatEntry(
+                    role="system",
+                    text="Guten Tag, ich bin Ihr digitaler Assistent f\u00fcr die Anamnese.",
+                    tone="system",
+                )
+            )
+
+        with ui.scroll_area().classes("w-full").style(
+            "max-height: 300px; overflow-y: auto; margin-top: 8px;"
+        ):
+            with ui.column().classes("w-full gap-2"):
+                for msg in session.avatar_messages:
+                    _render_message(msg)
+
+
+def _on_avatar_click() -> None:
+    ui.notify(
+        "Willkommen, ich bin Ihr digitaler Assistent.",
+        color="info",
+        position="bottom-right",
+    )
+
+
 def _render_mass_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -1200,10 +1262,7 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                     on_click=lambda: (session.reset(), refresh_ui()),
                 ).props("outline").classes("grow")
 
-    with ui.card().classes("surface-card w-full shadow-none"):
-        ui.label("Prozess").classes("eyebrow")
-        for label, status in _get_process_steps(session):
-            ui.label(label).classes(f"status-chip status-chip--{status} w-fit")
+    _render_avatar(session, refresh_ui)
 
     if session.controller is not None and session.controller.export_path is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
