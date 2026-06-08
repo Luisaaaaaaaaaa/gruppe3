@@ -19,6 +19,10 @@ class IdentityCheck:
         self._failed_attempts = 0
 
     @property
+    def patients(self) -> list[PatientRecord]:
+        return self._patients
+
+    @property
     def max_attempts(self) -> int:
         return self._max_attempts
 

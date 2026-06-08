@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -253,6 +254,7 @@ class BrowserSession:
     pending_input: Callable[[str], None] | None = None
     editing_answers: bool = False
     show_cancel_dialog: bool = False
+    login_blocked_until: float | None = None
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -267,6 +269,7 @@ class BrowserSession:
         self.pending_input = None
         self.editing_answers = False
         self.show_cancel_dialog = False
+        self.login_blocked_until = None
 
     @property
     def has_active_dialogue(self) -> bool:
@@ -487,6 +490,7 @@ def main_page() -> None:
                         _render_dialogue(session, refresh_ui)
 
                     _render_cancel_overlay(session, refresh_ui)
+                    _render_login_blocked_overlay(session, refresh_ui)
 
                 render_main()
 
@@ -554,6 +558,12 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             if result.success:
                 session.current_patient = result.patient
                 session.stage = "scenario"
+            elif result.escalate:
+                session.login_blocked_until = time.time() + 15
+                session.identity_check = session.identity_check.__class__(
+                    session.identity_check.patients,
+                    max_attempts=session.identity_check.max_attempts,
+                )
             refresh_ui()
 
         with ui.row().classes("w-full justify-end gap-3"):
@@ -1054,6 +1064,36 @@ def _dismiss_cancel_dialog(
 ) -> None:
     session.show_cancel_dialog = False
     refresh_ui()
+
+
+def _render_login_blocked_overlay(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.login_blocked_until is None:
+        return
+    remaining = session.login_blocked_until - time.time()
+    if remaining <= 0:
+        session.login_blocked_until = None
+        refresh_ui()
+        return
+
+    with ui.element("div").classes("fixed inset-0 bg-black/40 z-50"):
+        with ui.card().classes(
+            "surface-card shadow-none border-2 border-[#9f1d20]"
+        ).style(
+            "position: fixed; top: 50%; left: 50%; "
+            "transform: translate(-50%, -50%); z-index: 51;"
+        ):
+            ui.label("Anmeldung gesperrt").classes("text-lg font-semibold")
+            ui.label(
+                "Die Identität konnte nach drei Versuchen nicht bestätigt werden.\n"
+                "Das Fenster schliesst sich automatisch.\n"
+                "Bitte wenden Sie sich an das Praxispersonal."
+            ).classes(
+                "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+            )
+
+    ui.timer(1, once=True, callback=refresh_ui)
 
 
 def _render_mass_anamnesis(
