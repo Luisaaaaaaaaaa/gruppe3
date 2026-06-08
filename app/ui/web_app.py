@@ -1074,6 +1074,8 @@ def _render_login_blocked_overlay(
     remaining = session.login_blocked_until - time.time()
     if remaining <= 0:
         session.login_blocked_until = None
+        session.login_message = ""
+        session.login_tone = ""
         refresh_ui()
         return
 
