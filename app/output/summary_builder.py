@@ -58,8 +58,16 @@ def build_grouped_sections(
     answers: dict[str, str],
     vitals: dict[str, int | float],
 ) -> dict[str, dict[str, str]]:
+    sections: dict[str, dict[str, str]] = {}
+
+    vorerkrankungen = answers.get("vorerkrankungen_aktuell", "")
+    if vorerkrankungen:
+        sections["Allgemein"] = {
+            "Vorerkrankungen / Risikofaktoren (aktueller Stand)": vorerkrankungen,
+        }
+
     if scenario not in ("D", "diabetes"):
-        return {}
+        return sections
 
     return {
         "Verlauf": {

@@ -152,14 +152,16 @@ class DialogueController:
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
         questions: list[AnamnesisQuestion] = []
+        if self._conditions_question:
+            questions.append(self._conditions_question)
         if self._scenario_id == "cough":
-            questions = list(COUGH_QUESTIONS)
+            questions.extend(COUGH_QUESTIONS)
         elif self._scenario_id == "hypertension":
-            questions = list(HYPERTENSION_QUESTIONS)
+            questions.extend(HYPERTENSION_QUESTIONS)
         elif self._scenario_id == "chest_pain":
-            questions = list(CHEST_PAIN_QUESTIONS)
+            questions.extend(CHEST_PAIN_QUESTIONS)
         elif self._scenario_id == "diabetes":
-            questions = list(DIABETES_QUESTIONS)
+            questions.extend(DIABETES_QUESTIONS)
         if self._patient.medications:
             questions.extend(self._medication_questions)
         else:
@@ -171,6 +173,23 @@ class DialogueController:
                 )
             )
         return questions
+
+    @property
+    def _conditions_question(self) -> AnamnesisQuestion | None:
+        if not self._patient.conditions:
+            return None
+        return AnamnesisQuestion(
+            key="vorerkrankungen_aktuell",
+            text=(
+                f"In Ihrer Akte sind folgende Vorerkrankungen und Risikofaktoren "
+                f"vermerkt: {self._patient.conditions}. Hat sich daran etwas "
+                f"verändert? Sind Erkrankungen hinzugekommen oder wurden "
+                f"Beschwerden in letzter Zeit schlimmer oder besser? "
+                f"Bitte beschreiben Sie."
+            ),
+            input_type="freitext",
+            required=False,
+        )
 
     def start(self) -> None:
         log_info(f"Dialogue gestartet: Szenario={self._scenario_key}, Patient={self._patient.patient_id}")

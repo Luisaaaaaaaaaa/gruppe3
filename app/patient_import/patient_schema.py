@@ -8,3 +8,4 @@ class PatientRecord:
     last_name: str
     date_of_birth: str
     medications: list[str] = field(default_factory=list)
+    conditions: str = ""

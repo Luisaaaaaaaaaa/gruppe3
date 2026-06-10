@@ -16,8 +16,10 @@ class PatientListClient:
         for entry in raw_data:
             patient = entry.get("patient", {})
             master_data = patient.get("stammdaten", {})
-            medikation = patient.get("medizinische_uebersicht", {}).get("medikation", {})
+            uebersicht = patient.get("medizinische_uebersicht", {})
+            medikation = uebersicht.get("medikation", {})
             medications = self._extract_medication_names(medikation)
+            conditions = self._build_conditions_string(uebersicht)
             patients.append(
                 PatientRecord(
                     patient_id=patient["patient_id"],
@@ -25,10 +27,51 @@ class PatientListClient:
                     last_name=master_data["nachname"],
                     date_of_birth=master_data["geburtsdatum"],
                     medications=medications,
+                    conditions=conditions,
                 )
             )
 
         return patients
+
+    @staticmethod
+    def _build_conditions_string(uebersicht: dict) -> str:
+        parts: list[str] = []
+
+        diagnosed = uebersicht.get("dauerdiagnosen", [])
+        if diagnosed:
+            names = [
+                f"{d['bezeichnung']} ({d['icd10']})"
+                for d in diagnosed
+                if d.get("bezeichnung")
+            ]
+            parts.append("Dauerdiagnosen: " + ", ".join(names))
+
+        risk = uebersicht.get("risikofaktoren", {})
+        risk_items: list[str] = []
+        if risk.get("bmi"):
+            risk_items.append(f"BMI {risk['bmi']}")
+        rauchen = risk.get("rauchen", "")
+        if rauchen:
+            risk_items.append(f"Rauchen: {rauchen}")
+        alkohol = risk.get("alkohol", "")
+        if alkohol:
+            risk_items.append(f"Alkohol: {alkohol}")
+        familien = risk.get("familienanamnese", [])
+        if familien:
+            risk_items.append("Familienanamnese: " + "; ".join(familien))
+        if risk_items:
+            parts.append("Risikofaktoren: " + ". ".join(risk_items))
+
+        allergies = uebersicht.get("allergien", [])
+        if allergies:
+            items = [
+                f"{a['substanz']} ({a.get('schweregrad', 'nicht angegeben')})"
+                for a in allergies
+                if a.get("substanz")
+            ]
+            parts.append("Allergien: " + ", ".join(items))
+
+        return ". ".join(parts)
 
     @staticmethod
     def _extract_medication_names(medikation: dict) -> list[str]:
