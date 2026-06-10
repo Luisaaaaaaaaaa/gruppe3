@@ -13,7 +13,7 @@ class AnamnesisQuestion:
 
 
 SCENARIO_KEY = "hypertension"
-SCENARIO_TITLE = "Szenario C: Hypertonie-Kontrolle / auffaelliger Blutdruckwert"
+SCENARIO_TITLE = "Szenario C: Hypertonie-Kontrolle / auffälliger Blutdruckwert"
 
 QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion(
@@ -34,7 +34,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="puls",
-        text="Kennen Sie Ihren aktuellen Puls (Schlaege pro Minute)? Falls unbekannt, 'unbekannt' eingeben.",
+        text="Kennen Sie Ihren aktuellen Puls (Schläge pro Minute)? Falls unbekannt, 'unbekannt' eingeben.",
         input_type="zahl",
         slider_min=50,
         slider_max=250,
@@ -52,7 +52,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="brustschmerz",
-        text="Haben Sie aktuell Brustschmerzen oder ein Druckgefuehl im Brustbereich?",
+        text="Haben Sie aktuell Brustschmerzen oder ein Druckgefühl im Brustbereich?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
@@ -62,12 +62,12 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="neurologische_symptome",
-        text="Haben Sie neurologische Beschwerden wie Taubheitsgefuehl, Laehmungen, Sprachstoerungen oder Schwindel?",
+        text="Haben Sie neurologische Beschwerden wie Taubheitsgefühl, Lähmungen, Sprachstörungen oder Schwindel?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
         key="sehstoerungen",
-        text="Haben Sie aktuell Sehstoerungen (z.B. verschwommenes Sehen, Flimmern)?",
+        text="Haben Sie aktuell Sehstörungen (z.B. verschwommenes Sehen, Flimmern)?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
@@ -77,7 +77,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="lebensstil",
-        text="Wie wuerden Sie Ihren Lebensstil beschreiben? (Bewegung, Ernaehrung, Stress, Rauchen, Alkohol)",
+        text="Wie würden Sie Ihren Lebensstil beschreiben? (Bewegung, Ernährung, Stress, Rauchen, Alkohol)",
         input_type="freitext",
     ),
     AnamnesisQuestion(

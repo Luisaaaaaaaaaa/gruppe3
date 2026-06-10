@@ -9,16 +9,16 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="bekannte_diagnosen",
         text=(
             "Welche bekannten Diagnosen oder Vorerkrankungen liegen bei Ihnen vor? "
-            "(z.B. Typ-2-Diabetes, Bluthochdruck, Fettstoffwechselstoerung, Nierenerkrankung)"
+            "(z.B. Typ-2-Diabetes, Bluthochdruck, Fettstoffwechselstörung, Nierenerkrankung)"
         ),
         input_type="freitext",
     ),
     AnamnesisQuestion(
         key="hypo_hyper_hinweise",
         text=(
-            "Haben Sie aktuell Hinweise auf eine Unterzuckerung oder Ueberzuckerung? "
-            "(z.B. Zittern, Schweissausbruch, Schwindel, Sehstoerungen, starker Durst, "
-            "haeufiges Wasserlassen, Muedigkeit)"
+            "Haben Sie aktuell Hinweise auf eine Unterzuckerung oder Überzuckerung? "
+            "(z.B. Zittern, Schweißausbruch, Schwindel, Sehstörungen, starker Durst, "
+            "häufiges Wasserlassen, Müdigkeit)"
         ),
         input_type="ja_nein",
     ),
@@ -38,12 +38,12 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="gewichtsveraenderung",
-        text="Hat sich Ihr Gewicht in letzter Zeit veraendert?",
+        text="Hat sich Ihr Gewicht in letzter Zeit verändert?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
         key="gewichtsveraenderung_details",
-        text="Bitte beschreiben Sie die Gewichtsveraenderung. Zu- oder Abnahme und ungefaehr wie viel kg?",
+        text="Bitte beschreiben Sie die Gewichtsveränderung. Zu- oder Abnahme und ungefähr wie viel kg?",
         input_type="freitext",
         required=False,
     ),
@@ -66,8 +66,8 @@ QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion(
         key="lebensstil",
         text=(
-            "Wie wuerden Sie Ihren Lebensstil beschreiben? "
-            "(Ernaehrung, Bewegung, Rauchen, Alkohol, Stress)"
+            "Wie würden Sie Ihren Lebensstil beschreiben? "
+            "(Ernährung, Bewegung, Rauchen, Alkohol, Stress)"
         ),
         input_type="freitext",
     ),
@@ -75,7 +75,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="folgeerkrankungen_bekannt",
         text=(
             "Sind bei Ihnen Folgeerkrankungen oder bekannte Komplikationen des Diabetes bekannt? "
-            "(z.B. Nierenerkrankung, Augenerkrankung, Neuropathie, diabetischer Fuss, "
+            "(z.B. Nierenerkrankung, Augenerkrankung, Neuropathie, diabetischer Fuß, "
             "Herz-Kreislauf-Erkrankung)"
         ),
         input_type="ja_nein",
@@ -84,7 +84,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="folgeerkrankungen_details",
         text=(
             "Welche Folgeerkrankungen oder Komplikationen sind bekannt? "
-            "(z.B. Niere, Auge, Nerven, diabetischer Fuss, Herz-Kreislauf)"
+            "(z.B. Niere, Auge, Nerven, diabetischer Fuß, Herz-Kreislauf)"
         ),
         input_type="freitext",
         required=False,
@@ -96,7 +96,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="offene_wunde_fussproblem_details",
-        text="Seit wann besteht das Fussproblem oder die Wunde, und hat es sich verschlechtert?",
+        text="Seit wann besteht das Fußproblem oder die Wunde, und hat es sich verschlechtert?",
         input_type="freitext",
         required=False,
     ),
@@ -120,7 +120,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
         key="blutzuckerwert_details",
         text=(
             "Bitte geben Sie den letzten bekannten Blutzuckerwert an "
-            "(z.B. nuechtern 145 mg/dl oder nach dem Essen 180 mg/dl)."
+            "(z.B. nüchtern 145 mg/dl oder nach dem Essen 180 mg/dl)."
         ),
         input_type="freitext",
         required=False,
@@ -132,7 +132,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
     ),
     AnamnesisQuestion(
         key="offene_fragen",
-        text="Welche offenen Fragen haben Sie an das aerztliche Personal?",
+        text="Welche offenen Fragen haben Sie an das ärztliche Personal?",
         input_type="freitext",
     ),
 ]
@@ -178,7 +178,7 @@ def berechne_diabetes_verlaufsuebersicht(
     if _ja(answers.get("hypo_hyper_hinweise", "")):
         symptome.append(
             answers.get("hypo_hyper_beschwerden", "").strip()
-            or "Hinweise auf Hypo-/Hyperglykaemie wurden angegeben"
+            or "Hinweise auf Hypo-/Hyperglykämie wurden angegeben"
         )
 
     if _ja(answers.get("folgeerkrankungen_bekannt", "")):
@@ -214,8 +214,8 @@ def berechne_diabetes_verlaufsuebersicht(
         "komplikationen": "; ".join(komplikationen) if komplikationen else "keine bekannten Komplikationen dokumentiert",
         "vorbefunde": "; ".join(vorbefunde) if vorbefunde else "keine Vorbefunde dokumentiert",
         "hinweis": (
-            "Die Verlaufsuebersicht dient ausschliesslich der strukturierten Dokumentation "
-            "fuer aerztliches Personal. Es erfolgt keine Diagnose, Therapieempfehlung oder Entwarnung."
+            "Die Verlaufsübersicht dient ausschließlich der strukturierten Dokumentation "
+            "für ärztliches Personal. Es erfolgt keine Diagnose, Therapieempfehlung oder Entwarnung."
         ),
     }
 

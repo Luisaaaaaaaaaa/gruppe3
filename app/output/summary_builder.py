@@ -64,7 +64,7 @@ def build_grouped_sections(
     return {
         "Verlauf": {
             "Aktuelles Gewicht": answers.get("gewicht_aktuell", ""),
-            "Gewichtsveraenderung": (
+            "Gewichtsveränderung": (
                 answers.get("gewichtsveraenderung_details", "")
                 if answers.get("gewichtsveraenderung", "").strip().lower() in ("ja", "j", "yes", "y")
                 else "keine angegeben"
@@ -76,7 +76,7 @@ def build_grouped_sections(
             "Letzte Diabetes-Kontrolle": answers.get("letzte_kontrolle", ""),
         },
         "Aktuelle Symptome": {
-            "Hinweise auf Hypo-/Hyperglykaemie": answers.get("hypo_hyper_hinweise", ""),
+            "Hinweise auf Hypo-/Hyperglykämie": answers.get("hypo_hyper_hinweise", ""),
             "Beschwerden": answers.get("hypo_hyper_beschwerden", ""),
         },
         "Medikation": {

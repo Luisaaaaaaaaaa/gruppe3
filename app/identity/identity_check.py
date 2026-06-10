@@ -50,7 +50,7 @@ class IdentityCheck:
                 success=True,
                 patient=patient,
                 attempts_left=self._max_attempts,
-                message="Identitaet erfolgreich bestaetigt.",
+                message="Identität erfolgreich bestätigt.",
             )
 
         self._failed_attempts += 1
@@ -59,13 +59,13 @@ class IdentityCheck:
 
         if escalate:
             message = (
-                "Die Identitaet konnte nach drei Versuchen nicht bestaetigt werden. "
+                "Die Identität konnte nach drei Versuchen nicht bestätigt werden. "
                 "Bitte wenden Sie sich an das Praxispersonal."
             )
         else:
             message = (
-                "Die Angaben stimmen nicht mit der Tagesliste ueberein. "
-                f"Bitte pruefen Sie Ihre Eingabe. Verbleibende Versuche: {attempts_left}."
+                "Die Angaben stimmen nicht mit der Tagesliste überein. "
+                f"Bitte prüfen Sie Ihre Eingabe. Verbleibende Versuche: {attempts_left}."
             )
 
         return AuthenticationResult(

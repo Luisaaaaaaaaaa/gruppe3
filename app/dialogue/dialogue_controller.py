@@ -95,7 +95,7 @@ class DialogueController:
             questions.append(
                 AnamnesisQuestion(
                     key=f"{MED_PREFIX}{idx}",
-                    text=f"Nehmen Sie {med_name} regelmaessig/wie verschrieben ein?",
+                    text=f"Nehmen Sie {med_name} regelmäßig/wie verschrieben ein?",
                     input_type="ja_nein",
                 )
             )
@@ -142,10 +142,10 @@ class DialogueController:
             DialogueState.REQUEST_CONSENT: "Einwilligung",
             DialogueState.ANAMNESIS: "Assistierte Anamnese",
             DialogueState.VITAL_PARAMETERS: "Vitalparameter",
-            DialogueState.RED_FLAG_CHECK: "Risikopruefung",
+            DialogueState.RED_FLAG_CHECK: "Risikoprüfung",
             DialogueState.ESCALATION: "Eskalation",
             DialogueState.SUMMARY: "Zusammenfassung",
-            DialogueState.HANDOVER: "Uebergabe",
+            DialogueState.HANDOVER: "Übergabe",
             DialogueState.END: "Abschluss",
         }
         return phase_labels[self.state]
@@ -166,7 +166,7 @@ class DialogueController:
             questions.append(
                 AnamnesisQuestion(
                     key="medikamente",
-                    text="Welche Medikamente nehmen Sie regelmaessig ein?",
+                    text="Welche Medikamente nehmen Sie regelmäßig ein?",
                     input_type="freitext",
                 )
             )
@@ -215,7 +215,7 @@ class DialogueController:
             return
 
         if not consent:
-            log_info("Zustimmung abgelehnt - Anamnese wird nicht durchgefuehrt")
+            log_info("Zustimmung abgelehnt - Anamnese wird nicht durchgeführt")
             self._display(CONSENT_DECLINED)
             self._state_machine.jump_to(DialogueState.END)
             self._handle_state()
@@ -318,7 +318,7 @@ class DialogueController:
         log_state_change("ANAMNESIS", "VITAL_PARAMETERS")
         self._display(
             "\nVitalparameter werden nun erfasst. "
-            "Der Blutdruck wird ueber den Geraetesimulator gemessen..."
+            "Der Blutdruck wird über den Gerätesimulator gemessen..."
         )
 
         simulator = Simulator(geschlecht="weiblich", groesse_cm=167, alter=38)
@@ -331,7 +331,7 @@ class DialogueController:
         log_info(f"Vitalparameter gemessen: {bp['systolisch']}/{bp['diastolisch']} mmHg (simuliert)")
         self._display(
             f"Simulierter Blutdruck: {bp['systolisch']}/{bp['diastolisch']} mmHg "
-            f"[Quelle: Geraetesimulator]"
+            f"[Quelle: Gerätesimulator]"
         )
 
         self._state_machine.advance()
@@ -360,7 +360,7 @@ class DialogueController:
             self._display("\n--- WARNHINWEIS ---")
             for rf in self._red_flags:
                 self._display(f"[{rf.rule_id}] {rf.description}")
-            self._display("Hinweis: Aerztliche Pruefung empfohlen.")
+            self._display("Hinweis: Ärztliche Prüfung empfohlen.")
             self._display("-------------------")
         else:
             log_info("Keine Red Flags ausgeloest")
@@ -372,15 +372,15 @@ class DialogueController:
         self._display("\n========== ESKALATION ==========")
         self._display(
             "ACHTUNG: Es wurden kritische Warnzeichen erkannt. "
-            "Eine sofortige aerztliche Uebernahme ist erforderlich!"
+            "Eine sofortige ärztliche Übernahme ist erforderlich!"
         )
         self._display("")
         for rf in self._red_flags:
             self._display(f"  [{rf.severity.upper()}] {rf.rule_id}: {rf.description}")
-            self._display(f"    Ausgeloest durch: {rf.triggered_by}")
+            self._display(f"    Ausgelöst durch: {rf.triggered_by}")
         self._display("")
         self._display(
-            "Bitte informieren Sie umgehend das aerztliche Personal. "
+            "Bitte informieren Sie umgehend das ärztliche Personal. "
             "Die Anamnese wird nicht als Routinefall fortgesetzt."
         )
         self._display("================================")
@@ -456,8 +456,8 @@ class DialogueController:
 
     def _show_handover(self) -> None:
         self._display(
-            "\nDie Zusammenfassung wurde fuer das aerztliche Personal erstellt. "
-            "Die Uebergabe ist abgeschlossen."
+            "\nDie Zusammenfassung wurde für das ärztliche Personal erstellt. "
+            "Die Übergabe ist abgeschlossen."
         )
         self._display("Vielen Dank fuer Ihre Angaben. Sie koennen das System nun schliessen.")
         self._state_machine.advance()

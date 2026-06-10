@@ -398,7 +398,7 @@ def _handle_consent(
     callback = session.pending_input
     session.pending_input = None
     session.messages.append(
-        ChatEntry(role="user", text="ja" if answer == "ja" else "nein", tone="user")
+        ChatEntry(role="user", text="Ja" if answer == "ja" else "Nein", tone="user")
     )
     callback(answer)
     refresh_ui()
@@ -430,7 +430,7 @@ def _parse_birth_date(day: str, month: str, year: str) -> date:
     try:
         return date(int(year), int(month), int(day))
     except ValueError as exc:
-        raise ValueError("Bitte geben Sie ein gueltiges Kalenderdatum ein.") from exc
+        raise ValueError("Bitte geben Sie ein gültiges Kalenderdatum ein.") from exc
 
 
 def _render_message(entry: ChatEntry) -> None:
@@ -487,7 +487,7 @@ def main_page() -> None:
                     ui.label("SET Semesterprojekt").classes("eyebrow")
                     ui.label(PAGE_TITLE).classes("hero-title text-4xl font-bold")
                     ui.label(
-                        "Lokale Mehrbenutzer-Oberflaeche fuer strukturierte Voranamnese mit synthetischen Daten."
+                        "Lokale Mehrbenutzer-Oberfläche für strukturierte Voranamnese mit synthetischen Daten."
                     ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
 
                 with ui.row().classes("gap-2 flex-wrap"):
@@ -526,11 +526,11 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
         ui.label("Patientenanmeldung").classes("text-2xl font-semibold")
         ui.label(
             "Bitte melden Sie sich mit Vorname, Nachname und Geburtsdatum an. "
-            "Das System dient ausschliesslich der strukturierten Vorbereitung fuer aerztliches Personal."
+            "Das System dient ausschließlich der strukturierten Vorbereitung für ärztliches Personal."
         ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
 
         ui.label(
-            f"Verfuegbare Anmeldeversuche: {session.attempts_left}"
+            f"Verfügbare Anmeldeversuche: {session.attempts_left}"
         ).classes("status-chip tone-info w-fit")
 
         if session.login_message:
@@ -561,7 +561,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                 return
 
             if not (first_name.value or "").strip() or not (last_name.value or "").strip():
-                session.login_message = "Vorname und Nachname muessen ausgefuellt werden."
+                session.login_message = "Vorname und Nachname müssen ausgefüllt werden."
                 session.login_tone = "tone-danger"
                 refresh_ui()
                 return
@@ -587,7 +587,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             refresh_ui()
 
         with ui.row().classes("w-full justify-end gap-3"):
-            ui.button("Zuruecksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
+            ui.button("Zurücksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
                 "outline"
             )
             ui.button("Anmelden", on_click=submit_login).props("unelevated").classes(
@@ -599,7 +599,7 @@ def _render_scenario_selection(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
-        ui.label("Szenario auswaehlen").classes("text-2xl font-semibold")
+        ui.label("Szenario auswählen").classes("text-2xl font-semibold")
         ui.label(
             f"Angemeldet: {_format_patient_name(session.current_patient)}"
         ).classes("text-[1rem] text-slate-600")
@@ -658,7 +658,7 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                 "text-lg font-semibold"
             )
             ui.button(
-                "Zur Anmeldung zurueckkehren",
+                "Zur Anmeldung zurückkehren",
                 on_click=lambda: (session.reset(), refresh_ui()),
             ).props("outline")
         return
@@ -799,7 +799,7 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Strukturierte Zusammenfassung").classes("text-2xl font-semibold")
         ui.label(
-            "Die Ergebnisdarstellung ist abschnittsweise gegliedert und fuer die aerztliche Uebergabe gedacht."
+            "Die Ergebnisdarstellung ist abschnittsweise gegliedert und für die ärztliche Übergabe gedacht."
         ).classes("text-[1rem] leading-7 text-slate-600")
 
         with ui.row().classes("w-full gap-4 flex-wrap"):
@@ -904,8 +904,8 @@ def _build_question_form(
 
                 if question.input_type == "ja_nein":
                     radio = ui.radio(
-                        ["ja", "nein"],
-                        value=answer if answer in ("ja", "nein") else None,
+                        ["Ja", "Nein"],
+                        value=answer if answer in ("Ja", "Nein") else None,
                     ).props("inline")
                     radio.on("update:model-value", _make_radio_handler(key))
                     fields[key] = radio
@@ -987,13 +987,13 @@ def _build_question_form(
 
             for key in required_keys:
                 if not collected.get(key, "") and controller.is_question_visible(key, collected):
-                    errors.append(f"'{q_text_map[key]}' ist erforderlich und wurde nicht ausgefuellt.")
+                    errors.append(f"'{q_text_map[key]}' ist erforderlich und wurde nicht ausgefüllt.")
 
             for key, value in collected.items():
                 it = input_types.get(key)
-                if it == "ja_nein" and value and value not in ("ja", "nein"):
+                if it == "ja_nein" and value and value not in ("Ja", "Nein"):
                     errors.append(
-                        f"'{q_text_map[key]}' muss mit 'ja' oder 'nein' beantwortet werden."
+                        f"'{q_text_map[key]}' muss mit 'Ja' oder 'Nein' beantwortet werden."
                     )
                 elif it == "zahl" and value and value.lower() != "unbekannt":
                     try:
@@ -1109,7 +1109,7 @@ def _render_login_blocked_overlay(
             ui.label("Anmeldung gesperrt").classes("text-lg font-semibold")
             ui.label(
                 "Die Identität konnte nach drei Versuchen nicht bestätigt werden.\n"
-                "Das Fenster schliesst sich automatisch.\n"
+                "Das Fenster schließt sich automatisch.\n"
                 "Bitte wenden Sie sich an das Praxispersonal."
             ).classes(
                 "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"

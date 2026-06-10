@@ -23,7 +23,7 @@ def export_summary(summary: AnamnesisSummary, output_dir: Path | None = None) ->
     data["hinweis"] = (
         "SYNTHETISCHE DATEN - Kein realer Patient. "
         "Dieses Dokument wurde von einem Assistenzsystem erstellt und "
-        "ersetzt keine aerztliche Bewertung."
+        "ersetzt keine ärztliche Bewertung."
     )
 
     filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -4,15 +4,15 @@ ROLE_EXPLANATION = (
     "Wichtige Hinweise:\n"
     "- Das System stellt keine Diagnosen.\n"
     "- Das System gibt keine Therapieempfehlungen.\n"
-    "- Das System ersetzt keine aerztliche Beratung.\n"
-    "- Die abschliessende medizinische Bewertung erfolgt ausschliesslich "
-    "durch aerztliches Personal.\n\n"
-    "Ihre Angaben werden strukturiert erfasst und dem aerztlichen Personal "
-    "als Zusammenfassung uebergeben."
+    "- Das System ersetzt keine ärztliche Beratung.\n"
+    "- Die abschließende medizinische Bewertung erfolgt ausschließlich "
+    "durch ärztliches Personal.\n\n"
+    "Ihre Angaben werden strukturiert erfasst und dem ärztlichen Personal "
+    "als Zusammenfassung übergeben."
 )
 
 CONSENT_QUESTION = (
-    "Moechten Sie mit der assistierten Anamnese fortfahren?\n"
+    "Möchten Sie mit der assistierten Anamnese fortfahren?\n"
 )
 
 CONSENT_DECLINED = (
@@ -22,7 +22,7 @@ CONSENT_DECLINED = (
 
 CONSENT_ACCEPTED = (
     "Vielen Dank. Die assistierte Anamnese beginnt nun. "
-    "Sie koennen jederzeit 'Abbrechen' eingeben oder auf den Abbrechen-Button klicken, um die Anamnese zu beenden."
+    "Sie können jederzeit 'Abbrechen' eingeben oder auf den Abbrechen-Button klicken, um die Anamnese zu beenden."
 )
 
 
