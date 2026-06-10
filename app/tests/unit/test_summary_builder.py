@@ -133,7 +133,7 @@ class TestBuildSummary:
         summary = build_summary(
             patient=patient,
             scenario="D",
-            answers={"medikamente": "Metformin"},
+            answers={},
             vitals={"systolisch": 200},
             vitals_source="simuliert",
             red_flags=[
@@ -158,7 +158,6 @@ class TestBuildGroupedSections:
             "letzte_kontrolle": "vor 3 Monaten",
             "hypo_hyper_hinweise": "nein",
             "hypo_hyper_beschwerden": "",
-            "medikamente": "Metformin",
             "bekannte_diagnosen": "Diabetes Typ 2",
             "folgeerkrankungen_bekannt": "nein",
             "folgeerkrankungen_details": "",
@@ -170,8 +169,12 @@ class TestBuildGroupedSections:
             "blutzuckerwert_details": "",
             "offene_fragen": "keine",
             "lebensstil": "regelmaessig Sport",
+            "med_adhaerenz_0": "ja",
+            "med_adhaerenz_1": "nein",
+            "med_adhaerenz_grund_1": "Ich habe Nebenwirkungen",
         }
         sections = build_grouped_sections("D", answers, {})
+        assert "Anamnese" in sections
         assert "Verlauf" in sections
         assert "Aktuelle Symptome" in sections
         assert "Medikation" in sections
@@ -179,9 +182,12 @@ class TestBuildGroupedSections:
         assert "Vorbefunde" in sections
         assert "Offene Fragen" in sections
 
-    def test_non_diabetes_returns_empty(self) -> None:
+    def test_non_diabetes_no_diabetes_sections(self) -> None:
         sections = build_grouped_sections("A", {}, {})
-        assert sections == {}
+        # Keine Antworten -> keine "Anamnese"-Sektion
+        # Kein Diabetes -> keine Diabetes-Sektionen
+        assert "Anamnese" not in sections
+        assert "Verlauf" not in sections
 
     def test_gewichtsveraenderung_details_when_ja(self) -> None:
         answers = {

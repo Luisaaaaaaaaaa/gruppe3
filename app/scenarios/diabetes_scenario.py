@@ -14,14 +14,6 @@ QUESTIONS: list[AnamnesisQuestion] = [
         input_type="freitext",
     ),
     AnamnesisQuestion(
-        key="medikamente",
-        text=(
-            "Welche Medikamente nehmen Sie aktuell ein? "
-            "(z.B. Metformin, Insulin oder andere Medikamente)"
-        ),
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
         key="hypo_hyper_hinweise",
         text=(
             "Haben Sie aktuell Hinweise auf eine Unterzuckerung oder Ueberzuckerung? "
@@ -229,4 +221,4 @@ def berechne_diabetes_verlaufsuebersicht(
 
 
 def _ja(value: str) -> bool:
-    return value.strip().lower() in ("ja", "j", "yes", "y")
+    return (value or "").strip().lower() in ("ja", "j", "yes", "y")

@@ -287,7 +287,11 @@ def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | N
     return flags
 
 
-def check_diabetes(answers: dict[str, str], vitals: dict[str, int | float] | None = None) -> list[RedFlag]:
+def check_diabetes(
+    answers: dict[str, str],
+    vitals: dict[str, int | float] | None = None,
+    patient_medications: list[str] | None = None,
+) -> list[RedFlag]:
     flags: list[RedFlag] = []
 
     symptom_text = answers.get("hypo_hyper_beschwerden", "").lower()
@@ -428,16 +432,17 @@ def check_diabetes(answers: dict[str, str], vitals: dict[str, int | float] | Non
                 triggered_by=f"folgeerkrankungen_details={answers.get('folgeerkrankungen_details', '')}",
             ))
 
-    medikamente = answers.get("medikamente", "").lower()
-    if any(kw in medikamente for kw in ("insulin", "sulfonylharnstoff", "glibenclamid", "glimepirid")):
-        if _parse_ja_nein(answers.get("hypo_hyper_hinweise", "")):
-            if any(kw in symptom_text for kw in ("zitter", "schweiss", "schwindel", "schwach")):
-                flags.append(RedFlag(
-                    rule_id="DM-RF-016",
-                    description="Hypoglykaemie-Symptome bei Insulin-/Sulfonylharnstoff-Therapie: Erhoehtes Risiko fuer schwere Unterzuckerung.",
-                    severity="critical",
-                    triggered_by="medikamente+hypo_symptome",
-                ))
+    if patient_medications is not None:
+        med_text = " ".join(patient_medications).lower()
+        if any(kw in med_text for kw in ("insulin", "sulfonylharnstoff", "glibenclamid", "glimepirid")):
+            if _parse_ja_nein(answers.get("hypo_hyper_hinweise", "")):
+                if any(kw in symptom_text for kw in ("zitter", "schweiss", "schwindel", "schwach")):
+                    flags.append(RedFlag(
+                        rule_id="DM-RF-016",
+                        description="Hypoglykaemie-Symptome bei Insulin-/Sulfonylharnstoff-Therapie: Erhoehtes Risiko fuer schwere Unterzuckerung.",
+                        severity="critical",
+                        triggered_by="medikation_patient+hypo_symptome",
+                    ))
 
     return flags
 
@@ -537,7 +542,12 @@ def _extract_first_number(value: str) -> float | None:
     return None
 
 
-def check(scenario: str, answers: dict[str, str], vitals: dict | None = None) -> list[RedFlag]:
+def check(
+    scenario: str,
+    answers: dict[str, str],
+    vitals: dict | None = None,
+    patient_medications: list[str] | None = None,
+) -> list[RedFlag]:
     if scenario == "cough":
         return check_cough(answers, vitals)
     if scenario == "hypertension":
@@ -545,5 +555,5 @@ def check(scenario: str, answers: dict[str, str], vitals: dict | None = None) ->
     if scenario == "chest_pain":
         return check_chest_pain(answers, vitals)
     if scenario == "diabetes":
-        return check_diabetes(answers, vitals)
+        return check_diabetes(answers, vitals, patient_medications)
     return []

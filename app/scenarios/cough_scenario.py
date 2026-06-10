@@ -73,9 +73,4 @@ QUESTIONS: list[AnamnesisQuestion] = [
         ),
         input_type="freitext",
     ),
-    AnamnesisQuestion(
-        key="medikamente",
-        text="Welche Medikamente nehmen Sie aktuell ein?",
-        input_type="freitext",
-    ),
 ]

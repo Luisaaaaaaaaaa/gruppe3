@@ -54,11 +54,10 @@ class TestRoutineCaseNoRedFlag:
             "nein",          # neurologische_symptome
             "nein",          # sehstoerungen
             "Keine",         # vorerkrankungen
-            "Ramipril 5mg",  # medikamente
-            "ja",            # adhärenz
             "Wenig Sport",   # lebensstil
             "nein",          # risikofaktoren
             "78",            # gewicht
+            "ASS 100 mg",    # medikamente
         ]
 
         for answer in routine_answers:
@@ -92,7 +91,7 @@ class TestRedFlagEscalation:
         controller.start()
         callbacks.pop()("ja")  # consent
 
-        # Brustschmerz hat 18 Fragen: kritische Antworten setzen
+        # Brustschmerz hat 17 Fragen + 1 medikamente-Frage (keine Medis hinterlegt): 18
         critical_answers = [
             "Hinter dem Brustbein",  # lokalisation
             "vor 30 Minuten",        # beginn
@@ -110,8 +109,8 @@ class TestRedFlagEscalation:
             "nein",                  # alter_ueber_55
             "Bluthochdruck",         # kardiovaskulaere_risikofaktoren
             "Keine",                 # vorerkrankungen
-            "ASS 100mg",            # medikamente
             "nein",                  # druckschmerz_thoraxwand
+            "ASS 100 mg",            # medikamente
         ]
 
         for answer in critical_answers:

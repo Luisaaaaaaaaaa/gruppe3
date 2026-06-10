@@ -36,6 +36,9 @@ from app.scenarios.hypertension_scenario import (
     AnamnesisQuestion,
 )
 
+MED_PREFIX = "med_adhaerenz_"
+MED_REASON_PREFIX = "med_adhaerenz_grund_"
+
 SCENARIO_MAP: dict[str, str] = {
     "A": "cough",
     "B": "chest_pain",
@@ -86,6 +89,27 @@ class DialogueController:
         return self._export_path
 
     @property
+    def _medication_questions(self) -> list[AnamnesisQuestion]:
+        questions: list[AnamnesisQuestion] = []
+        for idx, med_name in enumerate(self._patient.medications):
+            questions.append(
+                AnamnesisQuestion(
+                    key=f"{MED_PREFIX}{idx}",
+                    text=f"Nehmen Sie {med_name} regelmaessig/wie verschrieben ein?",
+                    input_type="ja_nein",
+                )
+            )
+            questions.append(
+                AnamnesisQuestion(
+                    key=f"{MED_REASON_PREFIX}{idx}",
+                    text="Warum nicht?",
+                    input_type="freitext",
+                    required=False,
+                )
+            )
+        return questions
+
+    @property
     def current_question(self) -> AnamnesisQuestion | None:
         if self._current_question_index < len(self._questions):
             return self._questions[self._current_question_index]
@@ -127,15 +151,26 @@ class DialogueController:
         return phase_labels[self.state]
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
+        questions: list[AnamnesisQuestion] = []
         if self._scenario_id == "cough":
-            return list(COUGH_QUESTIONS)
-        if self._scenario_id == "hypertension":
-            return list(HYPERTENSION_QUESTIONS)
-        if self._scenario_id == "chest_pain":
-            return list(CHEST_PAIN_QUESTIONS)
-        if self._scenario_id == "diabetes":
-            return list(DIABETES_QUESTIONS)
-        return []
+            questions = list(COUGH_QUESTIONS)
+        elif self._scenario_id == "hypertension":
+            questions = list(HYPERTENSION_QUESTIONS)
+        elif self._scenario_id == "chest_pain":
+            questions = list(CHEST_PAIN_QUESTIONS)
+        elif self._scenario_id == "diabetes":
+            questions = list(DIABETES_QUESTIONS)
+        if self._patient.medications:
+            questions.extend(self._medication_questions)
+        else:
+            questions.append(
+                AnamnesisQuestion(
+                    key="medikamente",
+                    text="Welche Medikamente nehmen Sie regelmaessig ein?",
+                    input_type="freitext",
+                )
+            )
+        return questions
 
     def start(self) -> None:
         log_info(f"Dialogue gestartet: Szenario={self._scenario_key}, Patient={self._patient.patient_id}")
@@ -210,9 +245,15 @@ class DialogueController:
         if answers is None:
             answers = self._answers
 
+        # Medikamenten-Grund-Frage nur zeigen, wenn die Adhärenz-Frage mit "nein" beantwortet wurde
+        if question_key.startswith(MED_REASON_PREFIX):
+            idx = question_key[len(MED_REASON_PREFIX):]
+            adhaerenz_key = f"{MED_PREFIX}{idx}"
+            return (answers.get(adhaerenz_key) or "").strip().lower() in ("nein", "n", "no")
+
         if self._scenario_id == "cough":
             if question_key == "korpertemperatur":
-                fieber_antwort = answers.get("fieber", "").strip().lower()
+                fieber_antwort = (answers.get("fieber") or "").strip().lower()
                 return fieber_antwort in ("ja", "j", "yes", "y")
             return True
 
@@ -302,6 +343,7 @@ class DialogueController:
             scenario=self._scenario_id,
             answers=self._answers,
             vitals=self._vitals,
+            patient_medications=self._patient.medications,
         )
 
         if self._red_flags:
@@ -439,6 +481,7 @@ class DialogueController:
             scenario=self._scenario_id,
             answers=self._answers,
             vitals=self._vitals,
+            patient_medications=self._patient.medications,
         )
 
         self._summary = None

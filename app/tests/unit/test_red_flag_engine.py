@@ -613,29 +613,26 @@ class TestCheckDiabetes:
 
     def test_insulin_plus_hypo_symptoms_critical(self) -> None:
         answers = {
-            "medikamente": "Insulin Lantus 20 IE",
             "hypo_hyper_hinweise": "ja",
             "hypo_hyper_beschwerden": "Zittern und Schweissausbruch",
         }
-        flags = check_diabetes(answers)
+        flags = check_diabetes(answers, patient_medications=["Insulin Lantus"])
         assert any(f.rule_id == "DM-RF-016" and f.severity == "critical" for f in flags)
 
     def test_sulfonylharnstoff_plus_hypo_critical(self) -> None:
         answers = {
-            "medikamente": "Glimepirid 2mg",
             "hypo_hyper_hinweise": "ja",
             "hypo_hyper_beschwerden": "starker Schwindel und Schwaeche",
         }
-        flags = check_diabetes(answers)
+        flags = check_diabetes(answers, patient_medications=["Glimepirid"])
         assert any(f.rule_id == "DM-RF-016" and f.severity == "critical" for f in flags)
 
     def test_metformin_hypo_no_rf016(self) -> None:
         answers = {
-            "medikamente": "Metformin 1000mg",
             "hypo_hyper_hinweise": "ja",
             "hypo_hyper_beschwerden": "Zittern",
         }
-        flags = check_diabetes(answers)
+        flags = check_diabetes(answers, patient_medications=["Metformin"])
         assert not any(f.rule_id == "DM-RF-016" for f in flags)
 
     def test_missing_fields_no_crash(self) -> None:

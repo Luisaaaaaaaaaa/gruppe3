@@ -76,16 +76,6 @@ QUESTIONS: list[AnamnesisQuestion] = [
         input_type="freitext",
     ),
     AnamnesisQuestion(
-        key="medikamente",
-        text="Welche Medikamente nehmen Sie aktuell ein?",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="adhaerenz",
-        text="Nehmen Sie Ihre Medikamente regelmaessig ein?",
-        input_type="ja_nein",
-    ),
-    AnamnesisQuestion(
         key="lebensstil",
         text="Wie wuerden Sie Ihren Lebensstil beschreiben? (Bewegung, Ernaehrung, Stress, Rauchen, Alkohol)",
         input_type="freitext",
