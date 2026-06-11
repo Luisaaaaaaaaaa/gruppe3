@@ -595,26 +595,61 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             )
 
 
+def _get_recommended_scenario_key(
+    session: BrowserSession,
+) -> str | None:
+    if session.current_patient is None:
+        return None
+    return DialogueController.get_recommended_scenario(session.current_patient)
+
+
+SCENARIO_KEY_TO_UI: dict[str, str] = {
+    "cough": "A",
+    "chest_pain": "B",
+    "hypertension": "C",
+    "diabetes": "D",
+}
+
+
 def _render_scenario_selection(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
+    recommended = _get_recommended_scenario_key(session)
+    recommended_ui_key = SCENARIO_KEY_TO_UI.get(recommended) if recommended else None
+
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         ui.label("Szenario auswählen").classes("text-2xl font-semibold")
         ui.label(
             f"Angemeldet: {_format_patient_name(session.current_patient)}"
         ).classes("text-[1rem] text-slate-600")
 
+        if recommended_ui_key:
+            ui.label(
+                "Basierend auf Ihren Vorerkrankungen wird Szenario %s (%s) empfohlen."
+                % (recommended_ui_key, next(s["title"] for s in SCENARIOS if s["key"] == recommended_ui_key))
+            ).classes("tone-success status-chip w-fit")
+
         with ui.row().classes("w-full gap-4 flex-wrap"):
             for scenario in SCENARIOS:
-                with ui.card().classes(
+                is_recommended = scenario["key"] == recommended_ui_key
+                card_classes = (
                     "surface-card scenario-card min-w-[240px] grow shadow-none"
-                ):
+                )
+                if is_recommended:
+                    card_classes += " border-[3px] border-[#17603d] bg-[#e3f5e9]"
+
+                with ui.card().classes(card_classes):
                     with ui.row().classes("items-center gap-3"):
                         ui.icon(scenario["icon"]).classes(
                             f"rounded-2xl p-3 text-2xl {scenario['tone']}"
                         )
                         with ui.column().classes("gap-1"):
-                            ui.label(f"Szenario {scenario['key']}").classes("eyebrow")
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(f"Szenario {scenario['key']}").classes("eyebrow")
+                                if is_recommended:
+                                    ui.label("Empfohlen").classes(
+                                        "status-chip tone-success text-[0.7rem]"
+                                    )
                             ui.label(scenario["title"]).classes("text-lg font-semibold")
                             ui.label(scenario["subtitle"]).classes(
                                 "text-sm font-medium text-slate-500"

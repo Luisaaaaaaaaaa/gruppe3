@@ -18,6 +18,7 @@ from app.logger.audit_logger import (
     log_state_change,
 )
 from app.medical_rules.red_flag_engine import RedFlag, check
+from app.medical_rules.scenario_recommendation import recommend_scenario
 from app.output.export_json import export_summary
 from app.output.summary_builder import AnamnesisSummary, build_summary
 from app.patient_import.patient_schema import PatientRecord
@@ -134,6 +135,10 @@ class DialogueController:
             1,
         )
         return self._asked_question_count, total_questions
+
+    @staticmethod
+    def get_recommended_scenario(patient: PatientRecord) -> str | None:
+        return recommend_scenario(patient)
 
     @property
     def phase_label(self) -> str:
