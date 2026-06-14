@@ -24,6 +24,7 @@ from app.dialogue.state_machine import DialogueState
 from app.identity.identity_check import IdentityCheck
 from app.patient_import.patient_list_client import PatientListClient
 from app.patient_import.patient_schema import PatientRecord
+from app.output.export_pdf import export_summary_pdf
 
 MAX_ATTEMPTS = 3
 PAGE_TITLE = "SET Patientenanmeldung"
@@ -264,6 +265,8 @@ class BrowserSession:
     current_patient: PatientRecord | None = None
     selected_scenario: str | None = None
     controller: DialogueController | None = None
+    selected_scenarios: list[str] = field(default_factory=list)
+    controllers: list[DialogueController] = field(default_factory=list)
     stage: str = "login"
     attempts_left: int = MAX_ATTEMPTS
     login_message: str = ""
@@ -280,6 +283,8 @@ class BrowserSession:
         self.current_patient = None
         self.selected_scenario = None
         self.controller = None
+        self.selected_scenarios.clear()
+        self.controllers.clear()
         self.stage = "login"
         self.attempts_left = MAX_ATTEMPTS
         self.login_message = ""
@@ -292,12 +297,17 @@ class BrowserSession:
         self.avatar_messages.clear()
 
     @property
+    def primary_controller(self) -> DialogueController | None:
+        return self.controllers[0] if self.controllers else self.controller
+
+    @property
     def has_active_dialogue(self) -> bool:
-        return self.controller is not None
+        return self.primary_controller is not None
 
     @property
     def summary_ready(self) -> bool:
-        return self.controller is not None and self.controller.summary is not None
+        ctrl = self.primary_controller
+        return ctrl is not None and ctrl.summary is not None
 
 
 @dataclass
@@ -331,10 +341,11 @@ def _get_current_step(session: BrowserSession) -> int:
         return 0
     if session.stage == "scenario":
         return 1
-    if session.controller is None:
+    ctrl = session.primary_controller
+    if ctrl is None:
         return 1
 
-    state = session.controller.state
+    state = ctrl.state
     if state in (DialogueState.EXPLAIN_ROLE, DialogueState.REQUEST_CONSENT):
         return 2
     if state == DialogueState.ANAMNESIS:
@@ -395,12 +406,26 @@ def _handle_consent(
 ) -> None:
     if session.pending_input is None:
         return
+
+    consent_value = "ja" if answer == "ja" else "nein"
+
+    for ctrl in session.controllers:
+        if ctrl.state == DialogueState.REQUEST_CONSENT:
+            if consent_value == "ja":
+                ctrl._display(CONSENT_ACCEPTED)
+                ctrl._state_machine.advance()
+                ctrl._handle_state()
+            else:
+                ctrl._display(CONSENT_DECLINED)
+                ctrl._state_machine.jump_to(DialogueState.END)
+                ctrl._handle_state()
+
     callback = session.pending_input
     session.pending_input = None
     session.messages.append(
-        ChatEntry(role="user", text="Ja" if answer == "ja" else "Nein", tone="user")
+        ChatEntry(role="user", text=consent_value.capitalize(), tone="user")
     )
-    callback(answer)
+    callback(consent_value)
     refresh_ui()
 
 
@@ -611,14 +636,23 @@ SCENARIO_KEY_TO_UI: dict[str, str] = {
 }
 
 
+def _get_scenario_title(ui_key: str) -> str:
+    for s in SCENARIOS:
+        if s["key"] == ui_key:
+            return f"Szenario {ui_key} – {s['title']}"
+    return ui_key
+
+
 def _render_scenario_selection(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
     recommended = _get_recommended_scenario_key(session)
     recommended_ui_key = SCENARIO_KEY_TO_UI.get(recommended) if recommended else None
 
+    selected: set[str] = set()
+
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
-        ui.label("Szenario auswählen").classes("text-2xl font-semibold")
+        ui.label("Szenarien auswählen").classes("text-2xl font-semibold")
         ui.label(
             f"Angemeldet: {_format_patient_name(session.current_patient)}"
         ).classes("text-[1rem] text-slate-600")
@@ -657,37 +691,55 @@ def _render_scenario_selection(
                     ui.label(scenario["description"]).classes(
                         "text-[0.95rem] leading-6 text-slate-600"
                     )
-                    ui.button(
-                        "Szenario starten",
-                        on_click=lambda key=scenario["key"]: _start_scenario(
-                            session, key, refresh_ui
-                        ),
-                    ).props("outline").classes("mt-2 w-full")
+                    cb = ui.checkbox("Dieses Szenario auswählen")
+                    cb.on("update:model-value", lambda e, key=scenario["key"], cb=cb: (
+                        selected.add(key) if e.args else selected.discard(key)
+                    ))
+
+        ui.button(
+            "Ausgewählte Szenarien starten",
+            on_click=lambda: _start_scenarios(session, list(selected), refresh_ui),
+        ).props("unelevated").classes("bg-[#0f766e] text-white mt-4 w-full")
+
+        if recommended_ui_key:
+            ui.button(
+                "Nur empfohlenes Szenario starten",
+                on_click=lambda: _start_scenarios(session, [recommended], refresh_ui),
+            ).props("outline").classes("mt-2 w-full")
 
 
-def _start_scenario(
-    session: BrowserSession, scenario_key: str, refresh_ui: Callable[[], None]
+def _start_scenarios(
+    session: BrowserSession, scenario_keys: list[str], refresh_ui: Callable[[], None]
 ) -> None:
     if session.current_patient is None:
         ui.notify("Es ist kein Patient angemeldet.", color="negative")
         return
+    if not scenario_keys:
+        ui.notify("Bitte wählen Sie mindestens ein Szenario aus.", color="warning")
+        return
 
-    session.selected_scenario = scenario_key
+    session.selected_scenarios = scenario_keys
+    session.controllers.clear()
     session.messages.clear()
     session.pending_input = None
     session.stage = "dialogue"
-    session.controller = DialogueController(
-        scenario_key=scenario_key,
-        patient=session.current_patient,
-        display_message=lambda text: _append_system_message(session, text),
-        request_input=lambda callback: _request_dialogue_input(session, callback),
-    )
-    session.controller.start()
+
+    for key in scenario_keys:
+        ctrl = DialogueController(
+            scenario_key=key,
+            patient=session.current_patient,
+            display_message=lambda text: _append_system_message(session, text),
+            request_input=lambda callback: _request_dialogue_input(session, callback),
+        )
+        ctrl.start()
+        session.controllers.append(ctrl)
+
     refresh_ui()
 
 
 def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    if session.controller is None:
+    ctrl = session.primary_controller
+    if ctrl is None:
         with ui.card().classes("surface-card w-full shadow-none"):
             ui.label("Der Dialog konnte nicht initialisiert werden.").classes(
                 "text-lg font-semibold"
@@ -701,13 +753,13 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
             with ui.column().classes("gap-2"):
-                ui.label(session.controller.phase_label).classes("eyebrow")
+                ui.label(ctrl.phase_label).classes("eyebrow")
                 ui.label("Assistierte Anamnese").classes("text-2xl font-semibold")
                 ui.label(
                     f"Patient: {_format_patient_name(session.current_patient)}"
                 ).classes("text-[1rem] text-slate-600")
 
-        if session.controller.state in (
+        if ctrl.state in (
             DialogueState.EXPLAIN_ROLE,
             DialogueState.REQUEST_CONSENT,
         ):
@@ -734,7 +786,7 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                         "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[160px]"
                     )
 
-        elif session.controller.state == DialogueState.ANAMNESIS:
+        elif ctrl.state == DialogueState.ANAMNESIS:
             _render_mass_anamnesis(session, refresh_ui)
 
         else:
@@ -826,10 +878,15 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
 
 
 def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    if session.controller is None or session.controller.summary is None:
+    ctrl = session.primary_controller
+    if ctrl is None or ctrl.summary is None:
         return
 
-    summary = session.controller.summary
+    summary = ctrl.summary
+
+    scenario_text = " + ".join(
+        _get_scenario_title(k) for k in session.selected_scenarios
+    )
 
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Strukturierte Zusammenfassung").classes("text-2xl font-semibold")
@@ -843,7 +900,7 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 {
                     "Patient": summary.patient_name,
                     "Patienten-ID": summary.patient_id,
-                    "Szenario": summary.scenario,
+                    "Szenarien": scenario_text,
                     "Zeitpunkt": summary.timestamp,
                 },
             )
@@ -877,11 +934,30 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 {f"Punkt {index + 1}": point for index, point in enumerate(summary.open_points)},
             )
 
+        def _download_pdf() -> None:
+            try:
+                pdf_bytes = export_summary_pdf(ctrl.summary, session.current_patient)
+                patient_id = session.current_patient.patient_id if session.current_patient else "unknown"
+                ui.download(
+                    pdf_bytes,
+                    f"anamnese_{patient_id}.pdf",
+                )
+                ui.notify("PDF wird heruntergeladen.", color="positive")
+            except Exception as exc:
+                ui.notify(f"PDF-Fehler: {exc}", color="negative")
+
         with ui.row().classes("w-full justify-center gap-3 mt-6"):
             ui.button(
                 "Antworten bearbeiten",
                 on_click=lambda: _start_editing(session, refresh_ui),
             ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+
+            ui.button(
+                "Als PDF exportieren",
+                on_click=_download_pdf,
+            ).props("outline").classes(
+                "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
+            )
 
 
 def _start_editing(
@@ -1154,9 +1230,10 @@ def _render_login_blocked_overlay(
 
 
 def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    if session.controller is None:
+    ctrl = session.primary_controller
+    if ctrl is None:
         return
-    if session.controller.state != DialogueState.ANAMNESIS:
+    if ctrl.state != DialogueState.ANAMNESIS:
         return
 
     with ui.card().classes("surface-card w-full shadow-none avatar-container"):
@@ -1198,14 +1275,25 @@ def _on_avatar_click() -> None:
 def _render_mass_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    if session.controller is None:
+    if not session.controllers:
+        if session.controller is not None:
+            _render_mass_anamnesis_single(session, refresh_ui)
+        return
+    _render_mass_anamnesis_multi(session, refresh_ui)
+
+
+def _render_mass_anamnesis_single(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    ctrl = session.controller
+    if ctrl is None:
         return
 
-    questions_with_answers = session.controller.get_questions_with_answers()
+    questions_with_answers = ctrl.get_questions_with_answers()
 
     def _on_submit(answers: dict[str, str]) -> None:
         try:
-            session.controller.submit_mass_anamnesis(answers)
+            ctrl.submit_mass_anamnesis(answers)
             refresh_ui()
         except ValueError as exc:
             ui.notify(str(exc), color="negative")
@@ -1215,7 +1303,7 @@ def _render_mass_anamnesis(
         refresh_ui()
 
     _build_question_form(
-        controller=session.controller,
+        controller=ctrl,
         questions_with_answers=questions_with_answers,
         title="Anamnese",
         description=(
@@ -1229,24 +1317,106 @@ def _render_mass_anamnesis(
     )
 
 
-def _render_answer_editor(
+def _render_mass_anamnesis_multi(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    if session.controller is None:
+    controllers = session.controllers
+    if not controllers:
         return
 
-    questions_with_answers = session.controller.get_questions_with_answers()
+    all_questions: list[tuple[DialogueController, DialogueQuestion, str]] = []
+    key_to_controllers: dict[str, list[DialogueController]] = {}
+    for ctrl in controllers:
+        for q, answer in ctrl.get_questions_with_answers():
+            all_questions.append((ctrl, q, answer))
+            key_to_controllers.setdefault(q.key, []).append(ctrl)
+
+    duplicate_keys = {key for key, ctrls in key_to_controllers.items() if len(ctrls) > 1}
+
+    seen_keys: set[str] = set()
+    merged: list[tuple[DialogueController, DialogueQuestion, str]] = []
+
+    for ctrl, q, answer in all_questions:
+        if q.key in duplicate_keys:
+            if q.key not in seen_keys:
+                seen_keys.add(q.key)
+                merged.append((ctrl, q, answer))
+        else:
+            merged.append((ctrl, q, answer))
+
+    qa_for_form = [(q, answer) for _, q, answer in merged]
+
+    questions_with_answers = qa_for_form
+
+    required_keys_all: set[str] = set()
+    q_text_map: dict[str, str] = {}
+    input_types: dict[str, str] = {}
+    for ctrl, q, answer in merged:
+        required_keys_all.add(q.key) if q.required else None
+        q_text_map[q.key] = q.text
+        input_types[q.key] = q.input_type
 
     def _on_submit(answers: dict[str, str]) -> None:
         try:
-            session.controller.update_answers_and_regenerate(answers)
+            for ctrl in controllers:
+                ctrl.submit_mass_anamnesis(answers)
+            refresh_ui()
+        except ValueError as exc:
+            ui.notify(str(exc), color="negative")
+
+    def _on_cancel() -> None:
+        session.show_cancel_dialog = True
+        refresh_ui()
+
+    dedup_info = ""
+    if duplicate_keys:
+        key_labels = ", ".join(sorted(duplicate_keys))
+        dedup_info = (
+            f"Die Fragen {key_labels} werden in mehreren Szenarien verwendet "
+            "und daher nur einmal angezeigt."
+        )
+
+    scenario_text = " + ".join(
+        _get_scenario_title(k) for k in session.selected_scenarios
+    )
+
+    _build_question_form(
+        controller=controllers[0],
+        questions_with_answers=questions_with_answers,
+        title=f"Anamnese — {scenario_text}",
+        description=(
+            f"Alle Fragen aus den ausgewählten Szenarien auf einen Blick. "
+            f"Pflichtfelder sind mit * markiert. "
+            f"Einige Fragen werden dynamisch ein- oder ausgeblendet."
+            + (f"\n\n{dedup_info}" if dedup_info else "")
+        ),
+        submit_label="Absenden",
+        submit_callback=_on_submit,
+        cancel_callback=_on_cancel,
+        live_visibility=True,
+    )
+
+
+def _render_answer_editor(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    ctrl = session.primary_controller
+    if ctrl is None:
+        return
+
+    questions_with_answers = ctrl.get_questions_with_answers()
+
+    def _on_submit(answers: dict[str, str]) -> None:
+        try:
+            for c in session.controllers:
+                c.update_answers_and_regenerate(answers)
             session.editing_answers = False
             refresh_ui()
         except ValueError as exc:
             ui.notify(str(exc), color="negative")
 
     _build_question_form(
-        controller=session.controller,
+        controller=ctrl,
         questions_with_answers=questions_with_answers,
         title="Antworten bearbeiten",
         description=(
@@ -1268,6 +1438,7 @@ def _cancel_editing(
 
 
 def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    ctrl = session.primary_controller
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Sitzung").classes("eyebrow")
         ui.label(_format_patient_name(session.current_patient)).classes(
@@ -1281,9 +1452,16 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             ui.label(f"Patienten-ID: {session.current_patient.patient_id}").classes(
                 "text-sm text-slate-500"
             )
+            if session.selected_scenarios:
+                scenario_text = " + ".join(
+                    _get_scenario_title(k) for k in session.selected_scenarios
+                )
+                ui.label(f"Szenarien: {scenario_text}").classes(
+                    "text-sm text-slate-500"
+                )
 
-        if session.controller is not None:
-            ui.label(f"Aktuelle Phase: {session.controller.phase_label}").classes(
+        if ctrl is not None:
+            ui.label(f"Aktuelle Phase: {ctrl.phase_label}").classes(
                 "status-chip tone-info w-fit"
             )
 
@@ -1299,10 +1477,10 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
 
     _render_avatar(session, refresh_ui)
 
-    if session.controller is not None and session.controller.export_path is not None:
+    if ctrl is not None and ctrl.export_path is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
             ui.label("Export").classes("eyebrow")
-            ui.label(str(session.controller.export_path)).classes(
+            ui.label(str(ctrl.export_path)).classes(
                 "break-all text-sm leading-6 text-slate-600"
             )
 
