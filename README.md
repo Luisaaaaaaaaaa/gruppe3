@@ -97,10 +97,26 @@ Wichtige Verzeichnisse und Dateien:
 - lokale NiceGUI-Weboberflaeche mit parallelen Browser-Sitzungen
 - Diabetes-Szenario als eigene Fragenliste mit Pflichtfragen und optionalen Folgefragen
 - Einbindung von `Szenario D` in den `dialogue_controller`
+- Eulen-Avatar als visueller Assistent mit Zustands- und Sprechanimation
 - Diabetes-spezifische Red-Flags mit `warning` und `critical`
 - didaktischer Diabetes-Zusatzblock in der Ausgabemaske
 - lesbarere Gruppierung der Diabetes-Zusammenfassung
 - Validierung fuer numerische Eingaben vom Typ `zahl`
+
+## Avatar-Verhalten
+
+Die Weboberflaeche nutzt einen neutralen Eulen-Avatar als freundlichen, aber medizinisch-professionellen Assistenten. Der Avatar erscheint unter anderem in der Seitenleiste, bei der Auswahl des Anamnese-Modus und im Beschwerde-Chat.
+
+Der Avatar hat folgende Zustaende:
+
+- `neutral`: Wird angezeigt, wenn noch kein Dialog aktiv ist oder wenn die Rollenerklaerung beziehungsweise Einwilligung laeuft.
+- `hoert zu`: Wird im gefuehrten Gespraech angezeigt, wenn der Avatar die Anamnese-Fragen nacheinander stellt.
+- `spricht`: Wird waehrend der Sprachausgabe aktiviert. Dabei bewegt sich der Kopf leicht und der Schnabel wechselt zwischen geschlossen, leicht geoeffnet und deutlich geoeffnet.
+- `denkt nach`: Wird in der Anamnese-Auswahl, im Formularmodus und als allgemeiner Zwischenzustand angezeigt.
+- `warnt`: Wird bei Red-Flag-Pruefung oder Eskalation angezeigt, wenn moegliche Warnzeichen erkannt beziehungsweise weitergeleitet werden.
+- `freut sich`: Wird bei Zusammenfassung, Uebergabe und Abschluss angezeigt.
+
+Die Sprechanimation wird automatisch durch die Browser-Sprachausgabe (`speechSynthesis`) gesteuert. Sobald die Stimme startet, setzt die UI den Zustand `avatar-is-speaking`; am Ende der Sprachausgabe wird dieser Zustand wieder entfernt.
 
 ## Was noch ausgebaut werden sollte
 

@@ -202,18 +202,288 @@ STYLE_BLOCK = """
         line-height: 1.45;
     }
 
-    @keyframes pulse-avatar {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.08); }
+    .avatar-panel {
+        background: linear-gradient(135deg, rgba(214, 239, 233, 0.95), rgba(255, 240, 219, 0.92));
+        border: 1px solid rgba(23, 52, 47, 0.08);
+        border-radius: 28px;
+        padding: 18px;
     }
 
-    .avatar-bounce {
-        animation: pulse-avatar 2s ease-in-out infinite;
+    .owl-avatar {
+        --owl-feather: #236f68;
+        --owl-feather-dark: #174b47;
+        --owl-face: #f6ead7;
+        --owl-chest: #fffaf2;
+        --owl-beak: #c98737;
+        --owl-shadow: rgba(15, 73, 68, 0.2);
+        width: 84px;
+        height: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.38), transparent 28%),
+            linear-gradient(145deg, rgba(255, 250, 242, 0.72), rgba(214, 239, 233, 0.8));
+        box-shadow: 0 16px 32px var(--owl-shadow);
+        cursor: default;
+        transform-origin: center bottom;
+        animation: owl-idle 4s ease-in-out infinite;
+    }
+
+    .owl-avatar--small {
+        width: 58px;
+        height: 58px;
+    }
+
+    .owl-avatar--medium {
+        width: 64px;
+        height: 64px;
+    }
+
+    .owl-avatar__svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+    }
+
+    .owl-avatar__head {
+        transform-box: fill-box;
+        transform-origin: center bottom;
+    }
+
+    .owl-avatar__tufts,
+    .owl-avatar__face {
+        fill: var(--owl-feather);
+    }
+
+    .owl-avatar__wing {
+        fill: var(--owl-feather-dark);
+        opacity: 0.34;
+    }
+
+    .owl-avatar__mask {
+        fill: var(--owl-face);
+    }
+
+    .owl-avatar__chest,
+    .owl-avatar__coat {
+        fill: var(--owl-chest);
+    }
+
+    .owl-avatar__coat-line {
+        fill: none;
+        stroke: rgba(23, 52, 47, 0.2);
+        stroke-width: 2;
+        stroke-linecap: round;
+    }
+
+    .owl-avatar__eye-white {
+        fill: #fffdfa;
+    }
+
+    .owl-avatar__pupil {
+        fill: #17342f;
+        transform-box: fill-box;
+        transform-origin: center;
+        transition: transform 0.18s ease;
+    }
+
+    .owl-avatar__catchlight {
+        fill: #ffffff;
+        opacity: 0.9;
+    }
+
+    .owl-avatar__lid {
+        fill: var(--owl-face);
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: owl-blink 5.6s ease-in-out infinite;
+    }
+
+    .owl-avatar__brow {
+        fill: none;
+        stroke: rgba(23, 52, 47, 0.42);
+        stroke-width: 3;
+        stroke-linecap: round;
+        transform-box: fill-box;
+        transform-origin: center;
         transition: transform 0.2s ease;
     }
-    .avatar-bounce:active {
-        transform: scale(1.3) !important;
-        animation: none;
+
+    .owl-avatar__beak {
+        fill: var(--owl-beak);
+        transform-box: fill-box;
+        transform-origin: center top;
+    }
+
+    .owl-avatar__mouth-inside {
+        fill: #5a3428;
+        opacity: 0;
+    }
+
+    .owl-avatar__beak-open,
+    .owl-avatar__beak-wide {
+        opacity: 0;
+    }
+
+    .owl-avatar__smile {
+        fill: none;
+        stroke: rgba(23, 52, 47, 0.42);
+        stroke-width: 2.4;
+        stroke-linecap: round;
+        opacity: 0;
+    }
+
+    .owl-avatar__badge {
+        fill: #d6efe9;
+        stroke: rgba(23, 52, 47, 0.12);
+        stroke-width: 1.5;
+    }
+
+    .owl-avatar__badge-cross {
+        fill: none;
+        stroke: #236f68;
+        stroke-width: 2.1;
+        stroke-linecap: round;
+    }
+
+    .owl-avatar__thought-dot {
+        fill: #fffaf2;
+        stroke: rgba(23, 52, 47, 0.16);
+        stroke-width: 1.3;
+        opacity: 0;
+    }
+
+    .owl-avatar--thinking {
+        --owl-feather: #776e52;
+        --owl-feather-dark: #4e4939;
+        --owl-beak: #b87933;
+    }
+
+    .owl-avatar--thinking .owl-avatar__head {
+        transform: rotate(-4deg) translateY(1px);
+    }
+
+    .owl-avatar--thinking .owl-avatar__pupil {
+        transform: translate(2px, -2px);
+    }
+
+    .owl-avatar--thinking .owl-avatar__thought-dot {
+        opacity: 1;
+        animation: owl-thought 1.8s ease-in-out infinite;
+    }
+
+    .owl-avatar--listening .owl-avatar__head {
+        animation: owl-listen 2.4s ease-in-out infinite;
+    }
+
+    .owl-avatar--listening .owl-avatar__pupil {
+        transform: translate(0, 1px);
+    }
+
+    .owl-avatar--alert {
+        --owl-feather: #7f3234;
+        --owl-feather-dark: #5d2426;
+        --owl-beak: #b55a07;
+        --owl-shadow: rgba(127, 50, 52, 0.2);
+        background: linear-gradient(145deg, #fff7ed, #fde8e8);
+    }
+
+    .owl-avatar--alert .owl-avatar__brow-left {
+        transform: rotate(14deg) translateY(2px);
+    }
+
+    .owl-avatar--alert .owl-avatar__brow-right {
+        transform: rotate(-14deg) translateY(2px);
+    }
+
+    .owl-avatar--done {
+        --owl-feather: #2d7050;
+        --owl-feather-dark: #1e513a;
+        --owl-beak: #bd8741;
+        --owl-shadow: rgba(45, 112, 80, 0.18);
+    }
+
+    .owl-avatar--done .owl-avatar__smile {
+        opacity: 1;
+    }
+
+    .owl-avatar--done .owl-avatar__pupil {
+        transform: translateY(-1px);
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__head {
+        animation: owl-speak-nod 1.4s ease-in-out infinite;
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__beak-closed {
+        animation: owl-mouth-closed 0.6s steps(1, end) infinite;
+        transform: translateY(-1px) scaleY(0.82);
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__beak-open {
+        animation: owl-mouth-open 0.6s steps(1, end) infinite;
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__beak-wide {
+        animation: owl-mouth-wide 0.6s steps(1, end) infinite;
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__mouth-inside {
+        animation: owl-mouth-inside 0.6s steps(1, end) infinite;
+    }
+
+    body.avatar-is-speaking .owl-avatar .owl-avatar__lid {
+        animation-duration: 4.4s;
+    }
+
+    @keyframes owl-idle {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-2px); }
+    }
+
+    @keyframes owl-listen {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(2px); }
+    }
+
+    @keyframes owl-speak-nod {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        35% { transform: translateY(2px) rotate(-1deg); }
+        70% { transform: translateY(1px) rotate(1deg); }
+    }
+
+    @keyframes owl-blink {
+        0%, 93%, 100% { transform: scaleY(0); }
+        95%, 97% { transform: scaleY(1); }
+    }
+
+    @keyframes owl-mouth-closed {
+        0%, 20%, 76%, 100% { opacity: 1; }
+        21%, 75% { opacity: 0; }
+    }
+
+    @keyframes owl-mouth-open {
+        0%, 20%, 48%, 76%, 100% { opacity: 0; }
+        21%, 47% { opacity: 1; }
+    }
+
+    @keyframes owl-mouth-wide {
+        0%, 48%, 76%, 100% { opacity: 0; }
+        49%, 75% { opacity: 1; }
+    }
+
+    @keyframes owl-mouth-inside {
+        0%, 20%, 76%, 100% { opacity: 0; }
+        21%, 47% { opacity: 0.62; }
+        49%, 75% { opacity: 0.82; }
+    }
+
+    @keyframes owl-thought {
+        0%, 100% { transform: translateY(0); opacity: 0.42; }
+        50% { transform: translateY(-3px); opacity: 1; }
     }
 
     @media (max-width: 767px) {
@@ -292,6 +562,9 @@ class BrowserSession:
     chat_input_text: str = ""
     prefilled_answers: dict[str, str] = field(default_factory=dict)
     chat_phase_done: bool = False
+    anamnesis_mode: str | None = None
+    speech_enabled: bool = True
+    spoken_message_count: int = 0
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -313,6 +586,9 @@ class BrowserSession:
         self.chat_input_text = ""
         self.prefilled_answers.clear()
         self.chat_phase_done = False
+        self.anamnesis_mode = None
+        self.speech_enabled = True
+        self.spoken_message_count = 0
 
     @property
     def primary_controller(self) -> DialogueController | None:
@@ -502,6 +778,272 @@ def _render_summary_section(title: str, fields: dict[str, str]) -> None:
                 ui.label(value or "keine Angabe").classes(
                     "summary-value max-w-[65%] text-right whitespace-pre-wrap"
                 )
+
+
+def _owl_avatar_markup(tone: str, size: str) -> str:
+    return f"""
+    <div class="owl-avatar owl-avatar--{tone} owl-avatar--{size}" role="img" aria-label="Eulen-Avatar">
+        <svg class="owl-avatar__svg" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+            <path class="owl-avatar__coat" d="M31 103 C36 86 47 77 60 77 C73 77 84 86 89 103 Z" />
+            <path class="owl-avatar__coat-line" d="M60 82 L60 103" />
+            <circle class="owl-avatar__badge" cx="76" cy="93" r="7" />
+            <path class="owl-avatar__badge-cross" d="M76 89.5 L76 96.5 M72.5 93 L79.5 93" />
+
+            <g class="owl-avatar__head">
+                <path class="owl-avatar__tufts" d="M28 43 C27 29 35 19 44 33 C49 30 54 28 60 28 C66 28 71 30 76 33 C85 19 93 29 92 43 C98 50 101 59 100 68 C98 88 81 100 60 100 C39 100 22 88 20 68 C19 59 22 50 28 43 Z" />
+                <ellipse class="owl-avatar__face" cx="60" cy="62" rx="38" ry="39" />
+                <path class="owl-avatar__wing owl-avatar__wing-left" d="M31 66 C33 80 40 88 50 92 C43 74 43 61 49 49 C39 50 33 56 31 66 Z" />
+                <path class="owl-avatar__wing owl-avatar__wing-right" d="M89 66 C87 80 80 88 70 92 C77 74 77 61 71 49 C81 50 87 56 89 66 Z" />
+                <path class="owl-avatar__chest" d="M43 78 C48 88 53 93 60 93 C67 93 72 88 77 78 C73 83 67 85 60 85 C53 85 47 83 43 78 Z" />
+
+                <ellipse class="owl-avatar__mask owl-avatar__mask-left" cx="47" cy="56" rx="18" ry="20" />
+                <ellipse class="owl-avatar__mask owl-avatar__mask-right" cx="73" cy="56" rx="18" ry="20" />
+
+                <path class="owl-avatar__brow owl-avatar__brow-left" d="M37 43 C42 40 49 40 54 43" />
+                <path class="owl-avatar__brow owl-avatar__brow-right" d="M66 43 C71 40 78 40 83 43" />
+
+                <circle class="owl-avatar__eye-white" cx="47" cy="56" r="10.5" />
+                <circle class="owl-avatar__eye-white" cx="73" cy="56" r="10.5" />
+                <circle class="owl-avatar__pupil owl-avatar__pupil-left" cx="48" cy="57" r="4.5" />
+                <circle class="owl-avatar__pupil owl-avatar__pupil-right" cx="72" cy="57" r="4.5" />
+                <circle class="owl-avatar__catchlight" cx="50" cy="54" r="1.6" />
+                <circle class="owl-avatar__catchlight" cx="74" cy="54" r="1.6" />
+                <ellipse class="owl-avatar__lid owl-avatar__lid-left" cx="47" cy="56" rx="11" ry="10" />
+                <ellipse class="owl-avatar__lid owl-avatar__lid-right" cx="73" cy="56" rx="11" ry="10" />
+
+                <path class="owl-avatar__beak owl-avatar__beak-closed" d="M55 66 L60 73 L65 66 Z" />
+                <ellipse class="owl-avatar__mouth-inside" cx="60" cy="72" rx="5.6" ry="4.8" />
+                <path class="owl-avatar__beak owl-avatar__beak-open" d="M53 66 C55 76 65 76 67 66 C64 70 56 70 53 66 Z" />
+                <path class="owl-avatar__beak owl-avatar__beak-wide" d="M50 65 C53 82 67 82 70 65 C66 71 54 71 50 65 Z" />
+                <path class="owl-avatar__smile" d="M51 75 C56 80 64 80 69 75" />
+            </g>
+
+            <circle class="owl-avatar__thought-dot owl-avatar__thought-dot-one" cx="88" cy="33" r="3.8" />
+            <circle class="owl-avatar__thought-dot owl-avatar__thought-dot-two" cx="96" cy="25" r="2.6" />
+        </svg>
+    </div>
+    """
+
+
+def _render_owl_avatar(tone: str, size: str = "large") -> None:
+    ui.html(_owl_avatar_markup(tone, size)).classes("shrink-0")
+
+
+def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
+    ctrl = session.primary_controller
+    if ctrl is None:
+        return {
+            "icon": "sentiment_satisfied",
+            "tone": "calm",
+            "title": "Eulen-Assistent",
+            "subtitle": "Bereit fuer die Voranamnese.",
+        }
+
+    if ctrl.state == DialogueState.REQUEST_CONSENT:
+        return {
+            "icon": "waving_hand",
+            "tone": "calm",
+            "title": "Eulen-Assistent",
+            "subtitle": "Ich erklaere Ihnen kurz den Ablauf.",
+        }
+
+    if ctrl.state == DialogueState.ANAMNESIS:
+        if session.anamnesis_mode == "guided":
+            return {
+                "icon": "record_voice_over",
+                "tone": "listening",
+                "title": "Eulen-Assistent",
+                "subtitle": "Ich stelle Ihnen die Anamnese-Fragen nacheinander.",
+            }
+        return {
+            "icon": "forum",
+            "tone": "thinking",
+            "title": "Eulen-Assistent",
+            "subtitle": "Sie koennen Formular oder gefuehrtes Gespraech waehlen.",
+        }
+
+    if ctrl.state in (DialogueState.RED_FLAG_CHECK, DialogueState.ESCALATION):
+        return {
+            "icon": "priority_high",
+            "tone": "alert",
+            "title": "Eulen-Assistent",
+            "subtitle": "Ich achte auf Warnzeichen und informiere das Team.",
+        }
+
+    if ctrl.state in (DialogueState.SUMMARY, DialogueState.HANDOVER, DialogueState.END):
+        return {
+            "icon": "sentiment_very_satisfied",
+            "tone": "done",
+            "title": "Eulen-Assistent",
+            "subtitle": "Die Angaben wurden strukturiert aufbereitet.",
+        }
+
+    return {
+        "icon": "psychology_alt",
+        "tone": "thinking",
+        "title": "Eulen-Assistent",
+        "subtitle": "Ich begleite Sie durch den Ablauf.",
+    }
+
+
+def _speak_text(text: str) -> None:
+    escaped = (
+        text.replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("${", "\\${")
+    )
+    ui.run_javascript(
+        f"""
+        (() => {{
+            const avatarClass = 'avatar-is-speaking';
+            document.body.classList.remove(avatarClass);
+            if (!('speechSynthesis' in window)) {{
+                return;
+            }}
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(`{escaped}`);
+            utterance.lang = 'de-DE';
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+            const voices = window.speechSynthesis.getVoices() || [];
+            const germanVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('de'));
+            if (germanVoice) {{
+                utterance.voice = germanVoice;
+            }}
+            const stopSpeaking = () => document.body.classList.remove(avatarClass);
+            utterance.onstart = () => document.body.classList.add(avatarClass);
+            utterance.onend = stopSpeaking;
+            utterance.onerror = stopSpeaking;
+            window.speechSynthesis.speak(utterance);
+        }})()
+        """
+    )
+
+
+def _maybe_speak_latest_message(session: BrowserSession) -> None:
+    if not session.speech_enabled or session.anamnesis_mode != "guided":
+        return
+    if session.spoken_message_count >= len(session.messages):
+        return
+
+    latest_entry = session.messages[-1] if session.messages else None
+    if latest_entry is None or latest_entry.role != "system" or not latest_entry.text.strip():
+        session.spoken_message_count = len(session.messages)
+        return
+
+    session.spoken_message_count = len(session.messages)
+    _speak_text(latest_entry.text.strip())
+
+
+def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    _maybe_speak_latest_message(session)
+
+    with ui.scroll_area().classes("chat-shell w-full rounded-3xl bg-white/45 p-4"):
+        with ui.column().classes("w-full gap-3"):
+            for entry in session.messages:
+                _render_message(entry)
+
+    ui.run_javascript("""
+    setTimeout(() => {
+        document.querySelectorAll('.chat-shell').forEach((shell) => {
+            const container = shell.querySelector('.q-scrollarea__container') || shell;
+            container.scrollTop = container.scrollHeight;
+        });
+    }, 0);
+    """)
+
+    ctrl = session.primary_controller
+    current_q = ctrl.current_question if ctrl is not None else None
+    is_yes_no = current_q is not None and current_q.input_type == "ja_nein"
+
+    with ui.row().classes("w-full items-center justify-between gap-3 mb-3 flex-wrap"):
+        ui.label("Der Assistent kann die Fragen vorlesen.").classes(
+            "text-sm text-slate-600"
+        )
+        ui.button(
+            "Stimme aus" if session.speech_enabled else "Stimme an",
+            on_click=lambda: _toggle_speech(session, refresh_ui),
+            icon="volume_off" if session.speech_enabled else "volume_up",
+        ).props("outline").classes(
+            "border-[var(--app-accent)] text-[var(--app-accent)]"
+        )
+
+    if is_yes_no:
+        with ui.row().classes("w-full gap-3 justify-center mt-2"):
+            ui.button(
+                "Ja",
+                on_click=lambda: _answer_yes_no(session, "ja", refresh_ui),
+            ).props("unelevated").classes(
+                "bg-[#0f766e] text-white min-w-[120px]"
+            )
+            ui.button(
+                "Nein",
+                on_click=lambda: _answer_yes_no(session, "nein", refresh_ui),
+            ).props("outline").classes(
+                "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[120px]"
+            )
+
+        def cancel_yes_no() -> None:
+            if session.pending_input is None:
+                return
+            session.messages.append(
+                ChatEntry(role="user", text="abbrechen", tone="user")
+            )
+            callback = session.pending_input
+            session.pending_input = None
+            callback("abbrechen")
+            refresh_ui()
+
+        with ui.row().classes("w-full justify-center mt-2"):
+            ui.button(
+                "Abbrechen", on_click=cancel_yes_no
+            ).props("outline dense").classes(
+                "text-xs border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+            )
+        return
+
+    def submit_answer() -> None:
+        if session.pending_input is None:
+            return
+
+        answer = (answer_input.value or "").strip()
+        session.messages.append(
+            ChatEntry(
+                role="user",
+                text=answer or "(keine Angabe)",
+                tone="user",
+            )
+        )
+        callback = session.pending_input
+        session.pending_input = None
+        answer_input.value = ""
+        callback(answer)
+        refresh_ui()
+
+    def cancel_dialogue() -> None:
+        if session.pending_input is None:
+            return
+        answer_input.value = "abbrechen"
+        submit_answer()
+
+    answer_input = ui.input("Ihre Antwort").props("outlined").classes("w-full")
+    answer_input.on("keydown.enter", lambda _: submit_answer())
+    _render_speech_input_controls(answer_input.id)
+
+    with ui.row().classes("w-full justify-end gap-3"):
+        cancel_button = ui.button(
+            "Abbrechen", on_click=cancel_dialogue
+        ).props("outline").classes(
+            "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+        )
+        send_button = ui.button("Senden", on_click=submit_answer).props(
+            "unelevated"
+        ).classes("bg-[#0f766e] text-white")
+
+    if session.pending_input is None:
+        answer_input.disable()
+        send_button.disable()
+        cancel_button.disable()
 
 
 def main_page() -> None:
@@ -737,9 +1279,15 @@ def _start_scenarios(
         return
 
     session.selected_scenarios = scenario_keys
+    session.controller = None
     session.controllers.clear()
     session.messages.clear()
     session.pending_input = None
+    session.avatar_messages.clear()
+    session.chat_input_text = ""
+    session.prefilled_answers.clear()
+    session.chat_phase_done = False
+    session.anamnesis_mode = None
     session.stage = "dialogue"
 
     for key in scenario_keys:
@@ -808,88 +1356,7 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
             _render_mass_anamnesis(session, refresh_ui)
 
         else:
-            with ui.scroll_area().classes("chat-shell w-full rounded-3xl bg-white/45 p-4"):
-                with ui.column().classes("w-full gap-3"):
-                    for entry in session.messages:
-                        _render_message(entry)
-
-            current_q = session.controller.current_question
-            is_yes_no = current_q is not None and current_q.input_type == "ja_nein"
-
-            if is_yes_no:
-                with ui.row().classes("w-full gap-3 justify-center mt-2"):
-                    ui.button(
-                        "Ja",
-                        on_click=lambda: _answer_yes_no(session, "ja", refresh_ui),
-                    ).props("unelevated").classes(
-                        "bg-[#0f766e] text-white min-w-[120px]"
-                    )
-                    ui.button(
-                        "Nein",
-                        on_click=lambda: _answer_yes_no(session, "nein", refresh_ui),
-                    ).props("outline").classes(
-                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[120px]"
-                    )
-
-                def cancel_yes_no() -> None:
-                    if session.pending_input is None:
-                        return
-                    session.messages.append(
-                        ChatEntry(role="user", text="abbrechen", tone="user")
-                    )
-                    callback = session.pending_input
-                    session.pending_input = None
-                    callback("abbrechen")
-                    refresh_ui()
-
-                with ui.row().classes("w-full justify-center mt-2"):
-                    ui.button(
-                        "Abbrechen", on_click=cancel_yes_no
-                    ).props("outline dense").classes(
-                        "text-xs border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
-                    )
-            else:
-                def submit_answer() -> None:
-                    if session.pending_input is None:
-                        return
-
-                    answer = (answer_input.value or "").strip()
-                    session.messages.append(
-                        ChatEntry(
-                            role="user",
-                            text=answer or "(keine Angabe)",
-                            tone="user",
-                        )
-                    )
-                    callback = session.pending_input
-                    session.pending_input = None
-                    answer_input.value = ""
-                    callback(answer)
-                    refresh_ui()
-
-                def cancel_dialogue() -> None:
-                    if session.pending_input is None:
-                        return
-                    answer_input.value = "abbrechen"
-                    submit_answer()
-
-                answer_input = ui.input("Ihre Antwort").props("outlined").classes("w-full")
-                answer_input.on("keydown.enter", lambda _: submit_answer())
-
-                with ui.row().classes("w-full justify-end gap-3"):
-                    cancel_button = ui.button(
-                        "Abbrechen", on_click=cancel_dialogue
-                    ).props("outline").classes(
-                        "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
-                    )
-                    send_button = ui.button("Senden", on_click=submit_answer).props(
-                        "unelevated"
-                    ).classes("bg-[#0f766e] text-white")
-
-                if session.pending_input is None:
-                    answer_input.disable()
-                    send_button.disable()
-                    cancel_button.disable()
+            _render_guided_dialogue(session, refresh_ui)
 
     if session.summary_ready:
         _render_summary(session, refresh_ui)
@@ -1207,7 +1674,7 @@ def _build_question_form(
 def _render_cancel_overlay(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    if not session.show_cancel_dialog or session.controller is None:
+    if not session.show_cancel_dialog or session.primary_controller is None:
         return
 
     with ui.element("div").classes("fixed inset-0 bg-black/40 z-50"):
@@ -1242,12 +1709,17 @@ def _render_cancel_overlay(
 def _confirm_cancel_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    if session.controller is None:
+    if session.primary_controller is None:
         return
     session.show_cancel_dialog = False
     session.controller = None
+    session.controllers.clear()
+    session.selected_scenarios.clear()
     session.messages.clear()
     session.pending_input = None
+    session.anamnesis_mode = None
+    session.chat_phase_done = False
+    session.prefilled_answers.clear()
     session.stage = "scenario"
     refresh_ui()
 
@@ -1292,42 +1764,196 @@ def _render_login_blocked_overlay(
 
 
 def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    return
+    avatar = _get_avatar_state(session)
 
     with ui.card().classes("surface-card w-full shadow-none avatar-container"):
-        with ui.row().classes("w-full items-center gap-4"):
-            ui.label("\U0001fa7a").classes("avatar-bounce").style(
-                "font-size: 40px; line-height: 1; cursor: pointer;"
-            ).on("click", lambda: _on_avatar_click())
-            with ui.column().classes("gap-0"):
-                ui.label("Arzt-Assistent").classes("text-sm font-semibold")
-                ui.label("Ich helfe Ihnen gern.").classes(
-                    "text-xs text-slate-500"
+        with ui.row().classes("avatar-panel w-full items-center gap-4"):
+            _render_owl_avatar(avatar["tone"])
+            with ui.column().classes("gap-1"):
+                ui.label(avatar["title"]).classes("text-base font-semibold")
+                ui.label(avatar["subtitle"]).classes(
+                    "text-sm leading-6 text-slate-600"
                 )
 
-        if not session.avatar_messages:
-            session.avatar_messages.append(
-                ChatEntry(
-                    role="system",
-                    text="Guten Tag, ich bin Ihr digitaler Assistent f\u00fcr die Anamnese.",
-                    tone="system",
-                )
-            )
-
-        with ui.scroll_area().classes("w-full").style(
-            "max-height: 300px; overflow-y: auto; margin-top: 8px;"
-        ):
-            with ui.column().classes("w-full gap-2"):
-                for msg in session.avatar_messages:
-                    _render_message(msg)
+        if session.stage == "dialogue" and session.primary_controller is not None:
+            ui.button(
+                "Avatar begruessen",
+                on_click=lambda: _on_avatar_click(),
+            ).props("outline").classes("mt-4 w-full")
 
 
 def _on_avatar_click() -> None:
     ui.notify(
-        "Willkommen, ich bin Ihr digitaler Assistent.",
+        "Willkommen, ich begleite Sie durch die Anamnese.",
         color="info",
         position="bottom-right",
     )
+
+
+def _toggle_speech(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    session.speech_enabled = not session.speech_enabled
+    if not session.speech_enabled:
+        ui.run_javascript(
+            "if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); } "
+            "document.body.classList.remove('avatar-is-speaking');"
+        )
+    else:
+        session.spoken_message_count = 0
+    refresh_ui()
+
+
+def _render_speech_input_controls(target_input_id: str) -> None:
+    with ui.row().classes("w-full items-center gap-3 mt-2"):
+        mic_button = ui.button(icon="mic").props("round outline").classes(
+            "text-[#0f766e]"
+        )
+        mic_status = ui.label(
+            "Antwort alternativ per Spracheingabe ausfuellen."
+        ).classes("text-xs text-slate-500")
+
+    mic_recording = {"active": False}
+
+    def _start_mic() -> None:
+        ui.run_javascript(f"""
+        (() => {{
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) {{
+                alert('Spracheingabe nicht unterstuetzt. Bitte Chrome oder Edge verwenden.');
+                return;
+            }}
+            const r = new SR();
+            r.lang = 'de-DE';
+            r.continuous = true;
+            r.interimResults = true;
+            window._rec = r;
+            window._recFinal = '';
+            r.onresult = (e) => {{
+                let interim = '';
+                let finalText = '';
+                for (let i = 0; i < e.results.length; i++) {{
+                    if (e.results[i].isFinal) {{
+                        finalText += e.results[i][0].transcript + ' ';
+                    }} else {{
+                        interim += e.results[i][0].transcript;
+                    }}
+                }}
+                window._recFinal = finalText;
+                const el = getElement({target_input_id});
+                if (el) {{
+                    el.inputValue = (finalText + interim).trim();
+                }}
+            }};
+            r.onerror = () => {{ window._rec = null; }};
+            r.onend = () => {{ window._rec = null; }};
+            r.start();
+        }})()
+        """)
+        mic_recording["active"] = True
+        mic_status.set_text("Aufnahme laeuft... Nochmal klicken zum Stoppen.")
+        mic_button._props["icon"] = "stop"
+        mic_button._props["color"] = "negative"
+        mic_button.update()
+
+    def _stop_mic() -> None:
+        ui.run_javascript("if(window._rec){window._rec.stop();window._rec=null;}")
+        mic_recording["active"] = False
+        mic_status.set_text("Aufnahme beendet.")
+        mic_button._props["icon"] = "mic"
+        mic_button._props["color"] = None
+        mic_button.update()
+
+    def _toggle_mic() -> None:
+        if mic_recording["active"]:
+            _stop_mic()
+        else:
+            _start_mic()
+
+    mic_button.on_click(_toggle_mic)
+
+
+def _render_anamnesis_mode_choice(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        ui.label("Wie moechten Sie die Anamnese durchfuehren?").classes(
+            "text-2xl font-semibold"
+        )
+        ui.label(
+            "Sie koennen die Fragen klassisch als Formular beantworten oder sich vom Assistenten nacheinander durch die Anamnese fuehren lassen."
+        ).classes("text-[1rem] leading-7 text-slate-600")
+
+        with ui.row().classes("w-full gap-4 flex-wrap mt-2"):
+            with ui.card().classes("surface-card grow min-w-[260px] shadow-none"):
+                with ui.row().classes("items-center gap-3"):
+                    _render_owl_avatar("listening", "small")
+                    with ui.column().classes("gap-1"):
+                        ui.label("Gefuehrtes Gespraech").classes("text-lg font-semibold")
+                        ui.label("Avatar stellt die Anamnese-Fragen einzeln").classes(
+                            "text-sm text-slate-500"
+                        )
+                ui.label(
+                    "Der Button 'Bitte sprich mit mir' startet denselben Fragenkatalog wie unter 'Anamnese', aber als Schritt-fuer-Schritt-Dialog."
+                ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
+                ui.button(
+                    "Bitte sprich mit mir",
+                    on_click=lambda: (
+                        setattr(session, "anamnesis_mode", "guided"),
+                        setattr(session, "spoken_message_count", 0),
+                        refresh_ui(),
+                    ),
+                ).props("unelevated").classes("mt-4 w-full bg-[#0f766e] text-white")
+
+            with ui.card().classes("surface-card grow min-w-[260px] shadow-none"):
+                with ui.row().classes("items-center gap-3"):
+                    _render_owl_avatar("thinking", "small")
+                    with ui.column().classes("gap-1"):
+                        ui.label("Fragenformular").classes("text-lg font-semibold")
+                        ui.label("Alle Fragen gesammelt auf einer Seite").classes(
+                            "text-sm text-slate-500"
+                        )
+                ui.label(
+                    "Gut, wenn alles auf einmal sichtbar sein soll oder Angaben direkt vorausgefuellt und angepasst werden sollen."
+                ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
+                ui.button(
+                    "Formular verwenden",
+                    on_click=lambda: (
+                        setattr(session, "anamnesis_mode", "form"),
+                        refresh_ui(),
+                    ),
+                ).props("outline").classes(
+                    "mt-4 w-full border-[var(--app-accent)] text-[var(--app-accent)]"
+                )
+
+
+def _render_anamnesis_mode_toolbar(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.primary_controller is None or session.primary_controller.state != DialogueState.ANAMNESIS:
+        return
+
+    with ui.card().classes("surface-card w-full shadow-none"):
+        ui.label("Anamnese-Modus").classes("eyebrow")
+        ui.label("Sie koennen jederzeit zwischen Gespraech und Formular wechseln.").classes(
+            "text-sm leading-6 text-slate-600"
+        )
+        with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
+            ui.button(
+                "Bitte sprich mit mir",
+                on_click=lambda: (
+                    setattr(session, "anamnesis_mode", "guided"),
+                    setattr(session, "spoken_message_count", 0),
+                    refresh_ui(),
+                ),
+            ).props("unelevated").classes("bg-[#0f766e] text-white")
+            ui.button(
+                "Formular verwenden",
+                on_click=lambda: (
+                    setattr(session, "anamnesis_mode", "form"),
+                    refresh_ui(),
+                ),
+            ).props("outline").classes(
+                "border-[var(--app-accent)] text-[var(--app-accent)]"
+            )
 
 
 def _render_symptom_chat(
@@ -1338,10 +1964,14 @@ def _render_symptom_chat(
         return
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        _render_anamnesis_mode_toolbar(session, refresh_ui)
+
+        avatar = _get_avatar_state(session)
+
         with ui.row().classes("w-full items-center gap-4"):
-            ui.label("\U0001fa7a").style("font-size: 40px; line-height: 1;")
+            _render_owl_avatar(avatar["tone"], "medium")
             with ui.column().classes("gap-0"):
-                ui.label("Arzt-Assistent").classes("text-sm font-semibold")
+                ui.label(avatar["title"]).classes("text-sm font-semibold")
                 ui.label("Vorab-Erfassung Ihrer Beschwerden").classes(
                     "text-xs text-slate-500"
                 )
@@ -1465,18 +2095,26 @@ def _render_symptom_chat(
 def _render_mass_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    if not session.controllers:
-        if session.controller is not None:
-            _render_mass_anamnesis_single(session, refresh_ui)
+    if session.controllers:
+        _render_mass_anamnesis_multi(session, refresh_ui)
         return
-    _render_mass_anamnesis_multi(session, refresh_ui)
+    if session.primary_controller is not None:
+        _render_mass_anamnesis_single(session, refresh_ui)
 
 
 def _render_mass_anamnesis_single(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    ctrl = session.controller
+    ctrl = session.primary_controller
     if ctrl is None:
+        return
+
+    if session.anamnesis_mode == "guided":
+        _render_guided_dialogue(session, refresh_ui)
+        return
+
+    if session.anamnesis_mode is None:
+        _render_anamnesis_mode_choice(session, refresh_ui)
         return
 
     if not session.chat_phase_done:
@@ -1484,6 +2122,8 @@ def _render_mass_anamnesis_single(
         return
 
     questions_with_answers = ctrl.get_questions_with_answers()
+
+    _render_anamnesis_mode_toolbar(session, refresh_ui)
 
     def _on_submit(answers: dict[str, str]) -> None:
         try:
@@ -1519,6 +2159,14 @@ def _render_mass_anamnesis_multi(
     if not controllers:
         return
 
+    if session.anamnesis_mode == "guided":
+        _render_guided_dialogue(session, refresh_ui)
+        return
+
+    if session.anamnesis_mode is None:
+        _render_anamnesis_mode_choice(session, refresh_ui)
+        return
+
     if not session.chat_phase_done:
         _render_symptom_chat(session, refresh_ui)
         return
@@ -1546,6 +2194,8 @@ def _render_mass_anamnesis_multi(
     qa_for_form = [(q, answer) for _, q, answer in merged]
 
     questions_with_answers = qa_for_form
+
+    _render_anamnesis_mode_toolbar(session, refresh_ui)
 
     required_keys_all: set[str] = set()
     q_text_map: dict[str, str] = {}
