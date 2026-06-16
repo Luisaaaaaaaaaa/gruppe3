@@ -75,6 +75,17 @@ STYLE_BLOCK = """
         background: var(--app-panel-strong);
     }
 
+    .sticky-summary-actions {
+        position: sticky;
+        top: 12px;
+        z-index: 40;
+        background: rgba(255, 250, 242, 0.92);
+        border: 1px solid var(--app-border);
+        border-radius: 22px;
+        box-shadow: 0 16px 30px rgba(30, 65, 60, 0.10);
+        backdrop-filter: blur(10px);
+    }
+
     .hero-title {
         font-family: "Georgia", "Times New Roman", serif;
         letter-spacing: 0.01em;
@@ -895,6 +906,48 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         _get_scenario_title(k) for k in session.selected_scenarios
     )
 
+    def _download_pdf() -> None:
+        try:
+            pdf_bytes = export_summary_pdf(ctrl.summary, session.current_patient)
+            patient_id = session.current_patient.patient_id if session.current_patient else "unknown"
+            ui.download(
+                pdf_bytes,
+                f"anamnese_{patient_id}.pdf",
+            )
+            ui.notify("PDF wird heruntergeladen.", color="positive")
+        except Exception as exc:
+            ui.notify(f"PDF-Fehler: {exc}", color="negative")
+
+    def _render_summary_actions(sticky: bool = False) -> None:
+        if sticky:
+            with ui.card().classes("sticky-summary-actions w-full shadow-none"):
+                with ui.row().classes("w-full justify-center gap-3 flex-wrap items-center p-3"):
+                    ui.button(
+                        "Antworten bearbeiten",
+                        on_click=lambda: _start_editing(session, refresh_ui),
+                    ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+
+                    ui.button(
+                        "Als PDF exportieren",
+                        on_click=_download_pdf,
+                    ).props("outline").classes(
+                        "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
+                    )
+            return
+
+        with ui.row().classes("w-full justify-center gap-3 mt-6 flex-wrap"):
+            ui.button(
+                "Antworten bearbeiten",
+                on_click=lambda: _start_editing(session, refresh_ui),
+            ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+
+            ui.button(
+                "Als PDF exportieren",
+                on_click=_download_pdf,
+            ).props("outline").classes(
+                "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
+            )
+
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Strukturierte Zusammenfassung").classes("text-2xl font-semibold")
         ui.label(
@@ -920,6 +973,8 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 },
             )
 
+        _render_summary_actions(sticky=True)
+
         if summary.grouped_sections:
             for title, fields in summary.grouped_sections.items():
                 _render_summary_section(title, fields)
@@ -941,30 +996,7 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 {f"Punkt {index + 1}": point for index, point in enumerate(summary.open_points)},
             )
 
-        def _download_pdf() -> None:
-            try:
-                pdf_bytes = export_summary_pdf(ctrl.summary, session.current_patient)
-                patient_id = session.current_patient.patient_id if session.current_patient else "unknown"
-                ui.download(
-                    pdf_bytes,
-                    f"anamnese_{patient_id}.pdf",
-                )
-                ui.notify("PDF wird heruntergeladen.", color="positive")
-            except Exception as exc:
-                ui.notify(f"PDF-Fehler: {exc}", color="negative")
-
-        with ui.row().classes("w-full justify-center gap-3 mt-6"):
-            ui.button(
-                "Antworten bearbeiten",
-                on_click=lambda: _start_editing(session, refresh_ui),
-            ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
-
-            ui.button(
-                "Als PDF exportieren",
-                on_click=_download_pdf,
-            ).props("outline").classes(
-                "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
-            )
+        _render_summary_actions()
 
 
 def _start_editing(
@@ -1651,6 +1683,30 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             ui.label(str(ctrl.export_path)).classes(
                 "break-all text-sm leading-6 text-slate-600"
             )
+            if ctrl.summary is not None:
+                def _download_pdf_from_sidebar() -> None:
+                    try:
+                        pdf_bytes = export_summary_pdf(ctrl.summary, session.current_patient)
+                        patient_id = session.current_patient.patient_id if session.current_patient else "unknown"
+                        ui.download(
+                            pdf_bytes,
+                            f"anamnese_{patient_id}.pdf",
+                        )
+                        ui.notify("PDF wird heruntergeladen.", color="positive")
+                    except Exception as exc:
+                        ui.notify(f"PDF-Fehler: {exc}", color="negative")
+
+                with ui.column().classes("w-full gap-3 mt-3"):
+                    ui.button(
+                        "Antworten bearbeiten",
+                        on_click=lambda: _start_editing(session, refresh_ui),
+                    ).props("unelevated").classes("w-full bg-[#0f766e] text-white")
+                    ui.button(
+                        "Als PDF exportieren",
+                        on_click=_download_pdf_from_sidebar,
+                    ).props("outline").classes(
+                        "w-full border-[var(--app-accent)] text-[var(--app-accent)]"
+                    )
 
 def run_app() -> None:
     ui.run(
