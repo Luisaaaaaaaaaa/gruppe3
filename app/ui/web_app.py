@@ -1329,9 +1329,72 @@ def _render_symptom_chat(
             ).classes("whitespace-pre-wrap text-[0.97rem] leading-7")
 
         symptom_input = ui.textarea(
-            placeholder="Beschreiben Sie hier Ihre Beschwerden...",
+            placeholder="Beschreiben Sie hier Ihre Beschwerden oder nutzen Sie das Mikrofon...",
             value=session.chat_input_text,
-        ).classes("w-full mt-4").props("outlined rows=6")
+        ).classes("w-full mt-4 symptom-textarea").props("outlined rows=6")
+
+        with ui.row().classes("w-full items-center gap-3 mt-2"):
+            mic_button = ui.button(icon="mic").props("round outline").classes(
+                "text-[#0f766e]"
+            )
+            mic_status = ui.label("").classes("text-xs text-slate-500")
+
+        mic_recording = {"active": False}
+        ta_id = symptom_input.id
+
+        def _start_mic() -> None:
+            ui.run_javascript(f"""
+            (() => {{
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SR) {{ alert('Spracheingabe nicht unterstuetzt. Bitte Chrome oder Edge verwenden.'); return; }}
+                const r = new SR();
+                r.lang = 'de-DE';
+                r.continuous = true;
+                r.interimResults = true;
+                window._rec = r;
+                window._recFinal = '';
+                r.onresult = (e) => {{
+                    let interim = '';
+                    let finalText = '';
+                    for (let i = 0; i < e.results.length; i++) {{
+                        if (e.results[i].isFinal) {{
+                            finalText += e.results[i][0].transcript + ' ';
+                        }} else {{
+                            interim += e.results[i][0].transcript;
+                        }}
+                    }}
+                    window._recFinal = finalText;
+                    const el = getElement({ta_id});
+                    if (el) {{
+                        el.inputValue = (finalText + interim).trim();
+                    }}
+                }};
+                r.onerror = (ev) => {{ console.log('Speech error:', ev.error); window._rec = null; }};
+                r.onend = () => {{ window._rec = null; }};
+                r.start();
+            }})()
+            """)
+            mic_recording["active"] = True
+            mic_status.set_text("Aufnahme laeuft... Nochmal klicken zum Stoppen.")
+            mic_button._props["icon"] = "stop"
+            mic_button._props["color"] = "negative"
+            mic_button.update()
+
+        def _stop_mic() -> None:
+            ui.run_javascript("if(window._rec){window._rec.stop();window._rec=null;}")
+            mic_recording["active"] = False
+            mic_status.set_text("Aufnahme beendet.")
+            mic_button._props["icon"] = "mic"
+            mic_button._props["color"] = None
+            mic_button.update()
+
+        def _toggle_mic() -> None:
+            if mic_recording["active"]:
+                _stop_mic()
+            else:
+                _start_mic()
+
+        mic_button.on_click(_toggle_mic)
 
         def _on_submit_chat() -> None:
             text = (symptom_input.value or "").strip()
