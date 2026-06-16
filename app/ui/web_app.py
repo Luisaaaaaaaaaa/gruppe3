@@ -13,6 +13,7 @@ except ModuleNotFoundError as exc:
         "NiceGUI ist nicht installiert. Bitte zuerst 'pip install -r requirements.txt' ausfuehren."
     ) from exc
 
+from app.ai.symptom_extractor import extract_answers
 from app.dialogue.consent_flow import (
     CONSENT_ACCEPTED,
     CONSENT_DECLINED,
@@ -277,6 +278,9 @@ class BrowserSession:
     show_cancel_dialog: bool = False
     login_blocked_until: float | None = None
     avatar_messages: list[ChatEntry] = field(default_factory=list)
+    chat_input_text: str = ""
+    prefilled_answers: dict[str, str] = field(default_factory=dict)
+    chat_phase_done: bool = False
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -295,6 +299,9 @@ class BrowserSession:
         self.show_cancel_dialog = False
         self.login_blocked_until = None
         self.avatar_messages.clear()
+        self.chat_input_text = ""
+        self.prefilled_answers.clear()
+        self.chat_phase_done = False
 
     @property
     def primary_controller(self) -> DialogueController | None:
@@ -976,6 +983,7 @@ def _build_question_form(
     submit_callback: Callable[[dict[str, str]], None],
     cancel_callback: Callable[[], None],
     live_visibility: bool = True,
+    prefilled: dict[str, str] | None = None,
 ) -> None:
     if controller is None:
         return
@@ -1003,20 +1011,42 @@ def _build_question_form(
 
         for question, answer in questions_with_answers:
             key = question.key
+            effective_answer = answer
+            is_prefilled = False
+            if prefilled and key in prefilled and prefilled[key]:
+                effective_answer = prefilled[key]
+                is_prefilled = True
+
             label = question.text
             if key in required_keys:
                 label = f"{label} *"
 
-            with ui.card().classes("surface-card w-full shadow-none") as card:
+            card_classes = "surface-card w-full shadow-none"
+            if is_prefilled:
+                card_classes += " border-l-4 border-l-[#17603d]"
+
+            with ui.card().classes(card_classes) as card:
                 containers[key] = card
                 ui.label(label).classes(
                     "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
                 )
+                if is_prefilled:
+                    ui.label("KI-Vorschlag").classes(
+                        "text-[0.7rem] font-bold uppercase tracking-[0.1em] "
+                        "text-[#17603d] bg-[#e3f5e9] px-2 py-0.5 rounded w-fit"
+                    )
 
                 if question.input_type == "ja_nein":
+                    radio_value = None
+                    if effective_answer in ("Ja", "Nein"):
+                        radio_value = effective_answer
+                    elif effective_answer.lower() in ("ja", "j", "yes", "y"):
+                        radio_value = "Ja"
+                    elif effective_answer.lower() in ("nein", "n", "no"):
+                        radio_value = "Nein"
                     radio = ui.radio(
                         ["Ja", "Nein"],
-                        value=answer if answer in ("Ja", "Nein") else None,
+                        value=radio_value,
                     ).props("inline")
                     radio.on("update:model-value", _make_radio_handler(key))
                     fields[key] = radio
@@ -1031,7 +1061,7 @@ def _build_question_form(
                         step = float(question.slider_step or 1)
 
                         try:
-                            init_val = float(answer.replace(",", "."))
+                            init_val = float(effective_answer.replace(",", "."))
                         except (ValueError, AttributeError):
                             init_val = min_val
 
@@ -1064,13 +1094,13 @@ def _build_question_form(
                         )
                     else:
                         inp = ui.input(
-                            value=answer,
+                            value=effective_answer,
                             placeholder="Zahl eingeben oder 'unbekannt'",
                         ).classes("w-full").props("outlined")
                         fields[key] = inp
                 else:
                     ta = ui.textarea(
-                        value=answer,
+                        value=effective_answer,
                         placeholder="Ihre Antwort",
                     ).classes("w-full").props("outlined")
                     fields[key] = ta
@@ -1230,11 +1260,7 @@ def _render_login_blocked_overlay(
 
 
 def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    ctrl = session.primary_controller
-    if ctrl is None:
-        return
-    if ctrl.state != DialogueState.ANAMNESIS:
-        return
+    return
 
     with ui.card().classes("surface-card w-full shadow-none avatar-container"):
         with ui.row().classes("w-full items-center gap-4"):
@@ -1272,6 +1298,75 @@ def _on_avatar_click() -> None:
     )
 
 
+def _render_symptom_chat(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    ctrl = session.primary_controller
+    if ctrl is None:
+        return
+
+    with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        with ui.row().classes("w-full items-center gap-4"):
+            ui.label("\U0001fa7a").style("font-size: 40px; line-height: 1;")
+            with ui.column().classes("gap-0"):
+                ui.label("Arzt-Assistent").classes("text-sm font-semibold")
+                ui.label("Vorab-Erfassung Ihrer Beschwerden").classes(
+                    "text-xs text-slate-500"
+                )
+
+        with ui.element("div").classes("chat-bubble chat-bubble--system mt-4"):
+            ui.label("Assistenzsystem").classes(
+                "text-[0.74rem] font-bold uppercase tracking-[0.16em] opacity-75"
+            )
+            ui.label(
+                "Bitte schildern Sie mir in eigenen Worten Ihre aktuellen "
+                "Beschwerden und Symptome. Zum Beispiel: seit wann Sie die "
+                "Beschwerden haben, was genau Sie spueren, ob Sie Fieber haben, "
+                "welche Medikamente Sie nehmen usw.\n\n"
+                "Ihre Angaben werden automatisch ausgewertet und der Fragebogen "
+                "wird so weit wie moeglich vorausgefuellt. Offene Fragen koennen "
+                "Sie danach noch beantworten."
+            ).classes("whitespace-pre-wrap text-[0.97rem] leading-7")
+
+        symptom_input = ui.textarea(
+            placeholder="Beschreiben Sie hier Ihre Beschwerden...",
+            value=session.chat_input_text,
+        ).classes("w-full mt-4").props("outlined rows=6")
+
+        def _on_submit_chat() -> None:
+            text = (symptom_input.value or "").strip()
+            session.chat_input_text = text
+
+            if not text:
+                ui.notify(
+                    "Bitte beschreiben Sie Ihre Beschwerden oder klicken Sie auf 'Ueberspringen'.",
+                    color="warning",
+                )
+                return
+
+            questions = [q for q, _ in ctrl.get_questions_with_answers()]
+            ui.notify("KI-Auswertung laeuft...", color="info", position="top")
+            prefilled = extract_answers(text, questions)
+            session.prefilled_answers = prefilled
+            session.chat_phase_done = True
+            refresh_ui()
+
+        def _on_skip() -> None:
+            session.prefilled_answers = {}
+            session.chat_phase_done = True
+            refresh_ui()
+
+        with ui.row().classes("w-full justify-end gap-3 mt-4"):
+            ui.button(
+                "Ueberspringen", on_click=_on_skip
+            ).props("outline").classes(
+                "border-[rgba(159,29,32,0.25)] text-[#9f1d20]"
+            )
+            ui.button(
+                "Auswerten und weiter", on_click=_on_submit_chat
+            ).props("unelevated").classes("bg-[#0f766e] text-white")
+
+
 def _render_mass_anamnesis(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -1287,6 +1382,10 @@ def _render_mass_anamnesis_single(
 ) -> None:
     ctrl = session.controller
     if ctrl is None:
+        return
+
+    if not session.chat_phase_done:
+        _render_symptom_chat(session, refresh_ui)
         return
 
     questions_with_answers = ctrl.get_questions_with_answers()
@@ -1314,6 +1413,7 @@ def _render_mass_anamnesis_single(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
+        prefilled=session.prefilled_answers,
     )
 
 
@@ -1322,6 +1422,10 @@ def _render_mass_anamnesis_multi(
 ) -> None:
     controllers = session.controllers
     if not controllers:
+        return
+
+    if not session.chat_phase_done:
+        _render_symptom_chat(session, refresh_ui)
         return
 
     all_questions: list[tuple[DialogueController, DialogueQuestion, str]] = []
@@ -1394,6 +1498,7 @@ def _render_mass_anamnesis_multi(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
+        prefilled=session.prefilled_answers,
     )
 
 
