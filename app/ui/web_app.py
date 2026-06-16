@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +29,9 @@ from app.output.export_pdf import export_summary_pdf
 
 MAX_ATTEMPTS = 3
 PAGE_TITLE = "SET Patientenanmeldung"
+PERSONAL_PAGE_TITLE = "SET Personalmodus"
+PATIENT_MODE = "patient"
+PERSONAL_MODE = "personal"
 STYLE_BLOCK = """
 <style>
     :root {
@@ -541,6 +544,7 @@ class ChatEntry:
 
 @dataclass
 class BrowserSession:
+    entry_mode: str = PATIENT_MODE
     identity_check: IdentityCheck = field(
         default_factory=lambda: IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
     )
@@ -565,6 +569,7 @@ class BrowserSession:
     anamnesis_mode: str | None = None
     speech_enabled: bool = True
     spoken_message_count: int = 0
+    staff_search_query: str = ""
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -573,7 +578,7 @@ class BrowserSession:
         self.controller = None
         self.selected_scenarios.clear()
         self.controllers.clear()
-        self.stage = "login"
+        self.stage = "staff_selection" if self.entry_mode == PERSONAL_MODE else "login"
         self.attempts_left = MAX_ATTEMPTS
         self.login_message = ""
         self.login_tone = "tone-info"
@@ -589,6 +594,7 @@ class BrowserSession:
         self.anamnesis_mode = None
         self.speech_enabled = True
         self.spoken_message_count = 0
+        self.staff_search_query = ""
 
     @property
     def primary_controller(self) -> DialogueController | None:
@@ -602,6 +608,10 @@ class BrowserSession:
     def summary_ready(self) -> bool:
         ctrl = self.primary_controller
         return ctrl is not None and ctrl.summary is not None
+
+    @property
+    def is_personal_mode(self) -> bool:
+        return self.entry_mode == PERSONAL_MODE
 
 
 @dataclass
@@ -631,8 +641,10 @@ def _classify_message(text: str) -> str:
 
 
 def _get_current_step(session: BrowserSession) -> int:
-    if session.stage == "login":
+    if session.stage == "staff_selection":
         return 0
+    if session.stage == "login":
+        return 1 if session.is_personal_mode else 0
     if session.stage == "scenario":
         return 1
     ctrl = session.primary_controller
@@ -655,14 +667,24 @@ def _get_current_step(session: BrowserSession) -> int:
 
 
 def _get_process_steps(session: BrowserSession) -> list[tuple[str, str]]:
-    labels = [
-        "Anmeldung",
-        "Szenario",
-        "Einwilligung",
-        "Anamnese",
-        "Auswertung",
-        "Abschluss",
-    ]
+    if session.is_personal_mode:
+        labels = [
+            "Tagesliste",
+            "Identitaet",
+            "Einwilligung",
+            "Anamnese",
+            "Auswertung",
+            "Abschluss",
+        ]
+    else:
+        labels = [
+            "Anmeldung",
+            "Szenario",
+            "Einwilligung",
+            "Anamnese",
+            "Auswertung",
+            "Abschluss",
+        ]
     current_step = _get_current_step(session)
     chips: list[tuple[str, str]] = []
 
@@ -681,6 +703,70 @@ def _format_patient_name(patient: PatientRecord | None) -> str:
     if patient is None:
         return "Noch kein Patient angemeldet"
     return f"{patient.first_name} {patient.last_name}"
+
+
+def _format_display_date(raw_value: str) -> str:
+    if not raw_value:
+        return "keine Angabe"
+    try:
+        return date.fromisoformat(raw_value).strftime("%d.%m.%Y")
+    except ValueError:
+        return raw_value
+
+
+def _format_display_datetime(raw_value: str) -> str:
+    if not raw_value:
+        return "keine Angabe"
+    try:
+        return datetime.fromisoformat(raw_value).strftime("%d.%m.%Y, %H:%M")
+    except ValueError:
+        return raw_value
+
+
+def _format_detail_value(raw_value: str) -> str:
+    if not raw_value:
+        return "keine Angabe"
+    mapping = {
+        "weiblich": "Weiblich",
+        "maennlich": "Maennlich",
+        "divers": "Divers",
+        "de": "Deutsch",
+        "aktiv": "Aktiv",
+    }
+    return mapping.get(raw_value, raw_value)
+
+
+def _format_next_appointment(patient: PatientRecord) -> str:
+    parts: list[str] = []
+    if patient.details.next_appointment_at:
+        parts.append(_format_display_datetime(patient.details.next_appointment_at))
+    if patient.details.next_appointment_type:
+        parts.append(patient.details.next_appointment_type)
+    return " - ".join(parts) if parts else "keine Angabe"
+
+
+def _summarize_values(values: list[str] | tuple[str, ...], limit: int = 2) -> str:
+    if not values:
+        return "keine Angabe"
+    items = list(values)
+    if len(items) <= limit:
+        return ", ".join(items)
+    return ", ".join(items[:limit]) + f" +{len(items) - limit} weitere"
+
+
+def _patient_matches_staff_search(patient: PatientRecord, query: str) -> bool:
+    normalized_query = query.strip().casefold()
+    if not normalized_query:
+        return True
+
+    search_values = [
+        _format_patient_name(patient),
+        patient.date_of_birth,
+        _format_display_date(patient.date_of_birth),
+        patient.patient_id,
+    ]
+    combined = " ".join(search_values).casefold()
+    return normalized_query in combined
 
 
 def _append_system_message(session: BrowserSession, text: str) -> None:
@@ -1046,7 +1132,11 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
         cancel_button.disable()
 
 
-def main_page() -> None:
+def main_page(
+    entry_mode: str = PATIENT_MODE,
+    page_title: str = PAGE_TITLE,
+    hero_text: str | None = None,
+) -> None:
     ui.colors(
         primary="#0f766e",
         secondary="#fff0db",
@@ -1057,7 +1147,10 @@ def main_page() -> None:
     )
     ui.add_head_html(STYLE_BLOCK)
 
-    session = BrowserSession()
+    session = BrowserSession(
+        entry_mode=entry_mode,
+        stage="staff_selection" if entry_mode == PERSONAL_MODE else "login",
+    )
 
     def refresh_ui() -> None:
         render_header.refresh()
@@ -1070,9 +1163,10 @@ def main_page() -> None:
             with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
                 with ui.column().classes("gap-2"):
                     ui.label("SET Semesterprojekt").classes("eyebrow")
-                    ui.label(PAGE_TITLE).classes("hero-title text-4xl font-bold")
+                    ui.label(page_title).classes("hero-title text-4xl font-bold")
                     ui.label(
-                        "Lokale Mehrbenutzer-Oberfläche für strukturierte Voranamnese mit synthetischen Daten."
+                        hero_text
+                        or "Lokale Mehrbenutzer-Oberflaeche fuer strukturierte Voranamnese mit synthetischen Daten."
                     ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
 
                 with ui.row().classes("gap-2 flex-wrap"):
@@ -1085,7 +1179,9 @@ def main_page() -> None:
             with ui.column().classes("min-w-0 grow gap-6"):
                 @ui.refreshable
                 def render_main() -> None:
-                    if session.stage == "login":
+                    if session.stage == "staff_selection":
+                        _render_staff_selection(session, refresh_ui)
+                    elif session.stage == "login":
                         _render_login(session, refresh_ui)
                     elif session.stage == "scenario":
                         _render_scenario_selection(session, refresh_ui)
@@ -1108,14 +1204,34 @@ def main_page() -> None:
 
 def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
-        ui.label("Patientenanmeldung").classes("text-2xl font-semibold")
-        ui.label(
-            "Bitte melden Sie sich mit Vorname, Nachname und Geburtsdatum an. "
-            "Das System dient ausschließlich der strukturierten Vorbereitung für ärztliches Personal."
-        ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
+        if session.is_personal_mode and session.current_patient is not None:
+            ui.label("Patientenbestaetigung").classes("text-2xl font-semibold")
+            ui.label(
+                "Das Praxispersonal hat Sie bereits aus der Tagesliste ausgewaehlt. "
+                "Bitte bestaetigen Sie jetzt Name und Geburtsdatum, damit die vorbereiteten Szenarien starten koennen."
+            ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
+            _render_summary_section(
+                "Vorbereitung durch Praxispersonal",
+                {
+                    "Patient": _format_patient_name(session.current_patient),
+                    "Geburtsdatum": _format_display_date(
+                        session.current_patient.date_of_birth
+                    ),
+                    "Szenarien": " + ".join(
+                        _get_scenario_title(key) for key in session.selected_scenarios
+                    )
+                    or "keine Auswahl",
+                },
+            )
+        else:
+            ui.label("Patientenanmeldung").classes("text-2xl font-semibold")
+            ui.label(
+                "Bitte melden Sie sich mit Vorname, Nachname und Geburtsdatum an. "
+                "Das System dient ausschliesslich der strukturierten Vorbereitung fuer aerztliches Personal."
+            ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
 
         ui.label(
-            f"Verfügbare Anmeldeversuche: {session.attempts_left}"
+            f"Verfuegbare Anmeldeversuche: {session.attempts_left}"
         ).classes("status-chip tone-info w-fit")
 
         if session.login_message:
@@ -1146,7 +1262,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                 return
 
             if not (first_name.value or "").strip() or not (last_name.value or "").strip():
-                session.login_message = "Vorname und Nachname müssen ausgefüllt werden."
+                session.login_message = "Vorname und Nachname muessen ausgefuellt werden."
                 session.login_tone = "tone-danger"
                 refresh_ui()
                 return
@@ -1162,6 +1278,9 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
 
             if result.success:
                 session.current_patient = result.patient
+                if session.is_personal_mode and session.selected_scenarios:
+                    _start_scenarios(session, session.selected_scenarios, refresh_ui)
+                    return
                 session.stage = "scenario"
             elif result.escalate:
                 session.login_blocked_until = time.time() + 15
@@ -1172,9 +1291,15 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             refresh_ui()
 
         with ui.row().classes("w-full justify-end gap-3"):
-            ui.button("Zurücksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
-                "outline"
-            )
+            if session.is_personal_mode:
+                ui.button(
+                    "Zur Personal-Auswahl",
+                    on_click=lambda: _back_to_staff_selection(session, refresh_ui),
+                ).props("outline")
+            else:
+                ui.button("Zuruecksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
+                    "outline"
+                )
             ui.button("Anmelden", on_click=submit_login).props("unelevated").classes(
                 "bg-[#0f766e] text-white"
             )
@@ -1188,12 +1313,32 @@ def _get_recommended_scenario_key(
     return DialogueController.get_recommended_scenario(session.current_patient)
 
 
+def _back_to_staff_selection(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.stage = "staff_selection"
+    session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
+    session.attempts_left = MAX_ATTEMPTS
+    session.login_message = ""
+    session.login_tone = "tone-info"
+    session.current_patient = None
+    session.selected_scenarios.clear()
+    refresh_ui()
+
+
 SCENARIO_KEY_TO_UI: dict[str, str] = {
     "cough": "A",
     "chest_pain": "B",
     "hypertension": "C",
     "diabetes": "D",
 }
+
+
+def _get_recommended_scenario_ui_key(patient: PatientRecord | None) -> str | None:
+    if patient is None:
+        return None
+    recommended = DialogueController.get_recommended_scenario(patient)
+    return SCENARIO_KEY_TO_UI.get(recommended) if recommended else None
 
 
 def _get_scenario_title(ui_key: str) -> str:
@@ -1266,6 +1411,240 @@ def _render_scenario_selection(
                 "Nur empfohlenes Szenario starten",
                 on_click=lambda: _start_scenarios(session, [recommended], refresh_ui),
             ).props("outline").classes("mt-2 w-full")
+
+
+def _select_patient_for_personal_mode(
+    session: BrowserSession, patient: PatientRecord, refresh_ui: Callable[[], None]
+) -> None:
+    previous_id = session.current_patient.patient_id if session.current_patient else None
+    session.current_patient = patient
+    if previous_id != patient.patient_id:
+        recommended_ui_key = _get_recommended_scenario_ui_key(patient)
+        session.selected_scenarios = [recommended_ui_key] if recommended_ui_key else []
+    session.login_message = ""
+    session.login_tone = "tone-info"
+    refresh_ui()
+
+
+def _toggle_staff_scenario(
+    session: BrowserSession, scenario_key: str, is_selected: bool
+) -> None:
+    selected = set(session.selected_scenarios)
+    if is_selected:
+        selected.add(scenario_key)
+    else:
+        selected.discard(scenario_key)
+    session.selected_scenarios = sorted(selected)
+
+
+def _render_patient_detail_section(title: str, values: list[str] | tuple[str, ...]) -> None:
+    if not values:
+        return
+    with ui.card().classes("surface-card w-full shadow-none"):
+        ui.label(title).classes("text-base font-semibold")
+        for value in values:
+            ui.label(value).classes("whitespace-pre-wrap text-sm leading-6 text-slate-600")
+
+
+def _render_selected_patient_preview(patient: PatientRecord) -> None:
+    details = patient.details
+    with ui.column().classes("w-full gap-4"):
+        _render_summary_section(
+            "Kurzuebersicht",
+            {
+                "Patient": _format_patient_name(patient),
+                "Geburtsdatum": _format_display_date(patient.date_of_birth),
+                "Geschlecht": _format_detail_value(details.gender),
+                "Status": _format_detail_value(details.status),
+                "Wohnort": _format_detail_value(details.contact_city),
+                "Versicherung": _format_detail_value(details.insurance),
+                "Naechster Termin": _format_next_appointment(patient),
+            },
+        )
+        _render_summary_section(
+            "Kurzinfos",
+            {
+                "Dauerdiagnosen": _summarize_values(details.long_term_diagnoses),
+                "Medikation": _summarize_values(patient.medications),
+                "Risikofaktoren": _summarize_values(details.risk_factors),
+                "Allergien": _summarize_values(details.allergies),
+            },
+        )
+        if details.next_appointment_note:
+            _render_summary_section("Terminhinweis", {"Hinweis": details.next_appointment_note})
+        _render_patient_detail_section("Dauerdiagnosen", details.long_term_diagnoses)
+        _render_patient_detail_section("Akutdiagnosen", details.acute_diagnoses)
+        _render_patient_detail_section("Medikationsdetails", details.medication_details)
+        _render_patient_detail_section("Risikofaktoren", details.risk_factors)
+        _render_patient_detail_section("Patientenhinweise", details.patient_notes)
+        _render_patient_detail_section("Offene Aufgaben", details.open_tasks)
+
+
+def _handoff_to_patient(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    if session.current_patient is None:
+        ui.notify("Bitte waehlen Sie zuerst einen Patienten aus.", color="warning")
+        return
+    if not session.selected_scenarios:
+        ui.notify("Bitte waehlen Sie mindestens ein Szenario aus.", color="warning")
+        return
+
+    _start_scenarios(session, session.selected_scenarios, refresh_ui)
+
+
+def _render_staff_selection(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    selected_patient = session.current_patient
+    recommended_ui_key = _get_recommended_scenario_ui_key(selected_patient)
+
+    with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        ui.label("Praxispersonal: Tagesliste und Szenarien").classes("text-2xl font-semibold")
+        ui.label(
+            "Waehlen Sie einen Patienten aus der Tagesliste aus und markieren Sie alle Szenarien, "
+            "die fuer die assistierte Anamnese vorbereitet werden sollen. Danach startet direkt der Patientenmodus "
+            "mit den vorbereiteten Szenarien, ohne erneute Anmeldung."
+        ).classes("max-w-4xl text-[1rem] leading-7 text-slate-600")
+
+        if selected_patient is None:
+            @ui.refreshable
+            def render_filtered_patient_list() -> None:
+                filtered_patients = [
+                    patient
+                    for patient in PATIENTS
+                    if _patient_matches_staff_search(patient, session.staff_search_query)
+                ]
+
+                ui.label(f"{len(filtered_patients)} Treffer in der Tagesliste").classes(
+                    "text-sm text-slate-500"
+                )
+
+                with ui.column().classes("w-full gap-4"):
+                    for patient in filtered_patients:
+                        patient_recommendation = _get_recommended_scenario_ui_key(patient)
+                        with ui.card().classes("surface-card scenario-card w-full shadow-none"):
+                            with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
+                                with ui.column().classes("gap-1"):
+                                    ui.label(_format_patient_name(patient)).classes("text-lg font-semibold")
+                                    ui.label(
+                                        f"Geburtsdatum: {_format_display_date(patient.date_of_birth)}"
+                                    ).classes("text-sm text-slate-500")
+                                    ui.label(f"Patienten-ID: {patient.patient_id}").classes(
+                                        "text-sm text-slate-500"
+                                    )
+                                with ui.column().classes("items-end gap-2"):
+                                    if patient_recommendation:
+                                        ui.label(
+                                            f"Empfohlen: Szenario {patient_recommendation}"
+                                        ).classes("status-chip tone-success")
+                                    ui.button(
+                                        "Auswaehlen",
+                                        on_click=lambda patient=patient: _select_patient_for_personal_mode(
+                                            session, patient, refresh_ui
+                                        ),
+                                    ).props("unelevated").classes("min-w-[130px]")
+
+                            _render_summary_section(
+                                "Kurzuebersicht",
+                                {
+                                    "Dauerdiagnosen": _summarize_values(
+                                        patient.details.long_term_diagnoses
+                                    ),
+                                    "Medikation": _summarize_values(patient.medications),
+                                    "Risikofaktoren": _summarize_values(patient.details.risk_factors),
+                                    "Naechster Termin": _format_next_appointment(patient),
+                                },
+                            )
+
+                    if not filtered_patients:
+                        with ui.card().classes("surface-card w-full shadow-none"):
+                            ui.label("Kein Patient gefunden").classes("text-lg font-semibold")
+                            ui.label(
+                                "Bitte pruefen Sie Schreibweise oder Geburtsdatum und versuchen Sie es erneut."
+                            ).classes("text-sm leading-6 text-slate-600")
+
+            search_input = ui.input(
+                "Patient suchen (Name, Geburtsdatum oder Patienten-ID)",
+                value=session.staff_search_query,
+            ).props("outlined clearable").classes("w-full")
+            search_input.on(
+                "update:model-value",
+                lambda e: (
+                    setattr(session, "staff_search_query", e.args or ""),
+                    render_filtered_patient_list.refresh(),
+                ),
+            )
+
+            render_filtered_patient_list()
+        else:
+            with ui.row().classes("w-full justify-between items-center gap-3 flex-wrap"):
+                ui.label("Ausgewaehlter Patient").classes("eyebrow")
+                ui.button(
+                    "Zur Tagesliste zurueck",
+                    on_click=lambda: _back_to_staff_selection(session, refresh_ui),
+                ).props("outline")
+
+            _render_selected_patient_preview(selected_patient)
+
+            if recommended_ui_key:
+                ui.label(
+                    f"Automatisch vorausgewaehlt: Szenario {recommended_ui_key}"
+                ).classes("status-chip tone-success w-fit")
+
+            with ui.card().classes("surface-card w-full shadow-none"):
+                ui.label("Szenarien festlegen").classes("text-lg font-semibold")
+                ui.label(
+                    "Mehrfachauswahl ist erlaubt. Die markierten Szenarien werden direkt im Patientenmodus gestartet."
+                ).classes("text-sm leading-6 text-slate-600")
+
+                with ui.column().classes("w-full gap-3 mt-3"):
+                    for scenario in SCENARIOS:
+                        is_recommended = scenario["key"] == recommended_ui_key
+                        is_checked = scenario["key"] in set(session.selected_scenarios)
+                        card_classes = "surface-card scenario-card w-full shadow-none"
+                        if is_recommended:
+                            card_classes += " border-[2px] border-[#17603d] bg-[#e3f5e9]"
+                        with ui.card().classes(card_classes):
+                            with ui.row().classes("items-start gap-3"):
+                                ui.icon(scenario["icon"]).classes(
+                                    f"rounded-2xl p-3 text-2xl {scenario['tone']}"
+                                )
+                                with ui.column().classes("grow gap-1"):
+                                    with ui.row().classes("items-center gap-2 flex-wrap"):
+                                        ui.label(f"Szenario {scenario['key']}").classes("eyebrow")
+                                        if is_recommended:
+                                            ui.label("Empfohlen").classes(
+                                                "status-chip tone-success text-[0.7rem]"
+                                            )
+                                    ui.label(scenario["title"]).classes("text-lg font-semibold")
+                                    ui.label(scenario["subtitle"]).classes(
+                                        "text-sm font-medium text-slate-500"
+                                    )
+                                    ui.label(scenario["description"]).classes(
+                                        "text-sm leading-6 text-slate-600"
+                                    )
+                                checkbox = ui.checkbox(
+                                    "Fuer den Patienten vorbereiten",
+                                    value=is_checked,
+                                )
+                                checkbox.on(
+                                    "update:model-value",
+                                    lambda e, key=scenario["key"]: _toggle_staff_scenario(
+                                        session, key, bool(e.args)
+                                    ),
+                                )
+
+            with ui.row().classes("w-full justify-end gap-3"):
+                ui.button(
+                    "Szenarien leeren",
+                    on_click=lambda: (
+                        setattr(session, "selected_scenarios", []),
+                        refresh_ui(),
+                    ),
+                ).props("outline")
+                ui.button(
+                    "Patientenmodus starten",
+                    on_click=lambda: _handoff_to_patient(session, refresh_ui),
+                ).props("unelevated").classes("bg-[#0f766e] text-white")
 
 
 def _start_scenarios(
@@ -1720,7 +2099,7 @@ def _confirm_cancel_anamnesis(
     session.anamnesis_mode = None
     session.chat_phase_done = False
     session.prefilled_answers.clear()
-    session.stage = "scenario"
+    session.stage = "staff_selection" if session.is_personal_mode else "scenario"
     refresh_ui()
 
 
@@ -2294,9 +2673,14 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         ui.label(_format_patient_name(session.current_patient)).classes(
             "text-xl font-semibold"
         )
-        ui.label(
-            "Jede Browser-Sitzung fuehrt ihren eigenen Login- und Dialogzustand."
-        ).classes("text-sm leading-6 text-slate-600")
+        if session.is_personal_mode:
+            ui.label(
+                "Diese Browser-Sitzung startet im Personalmodus und wechselt danach direkt in die vorbereitete Anamnese."
+            ).classes("text-sm leading-6 text-slate-600")
+        else:
+            ui.label(
+                "Jede Browser-Sitzung fuehrt ihren eigenen Login- und Dialogzustand."
+            ).classes("text-sm leading-6 text-slate-600")
 
         if session.current_patient is not None:
             ui.label(f"Patienten-ID: {session.current_patient.patient_id}").classes(
@@ -2358,12 +2742,25 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                         "w-full border-[var(--app-accent)] text-[var(--app-accent)]"
                     )
 
-def run_app() -> None:
+def run_app(
+    entry_mode: str = PATIENT_MODE,
+    port: int = 8080,
+    title: str = PAGE_TITLE,
+) -> None:
+    hero_text = (
+        "Praxispersonal waehlt Patient und Szenarien aus, danach startet direkt die vorbereitete Anamnese im Patientenmodus."
+        if entry_mode == PERSONAL_MODE
+        else "Lokale Mehrbenutzer-Oberflaeche fuer strukturierte Voranamnese mit synthetischen Daten."
+    )
     ui.run(
-        root=main_page,
+        root=lambda: main_page(
+            entry_mode=entry_mode,
+            page_title=title,
+            hero_text=hero_text,
+        ),
         host="127.0.0.1",
-        port=8080,
-        title=PAGE_TITLE,
+        port=port,
+        title=title,
         reload=False,
         show=False,
     )

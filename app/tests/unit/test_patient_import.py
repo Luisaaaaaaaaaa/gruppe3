@@ -19,10 +19,55 @@ class TestPatientListClient:
             {
                 "patient": {
                     "patient_id": "P-001",
+                    "status": "aktiv",
                     "stammdaten": {
                         "vorname": "Anna",
                         "nachname": "Muster",
                         "geburtsdatum": "1985-03-14",
+                        "geschlecht": "weiblich",
+                        "sprache": "de",
+                    },
+                    "kontakt": {"adresse": {"ort": "Mannheim"}},
+                    "versicherung": {"krankenkasse": {"name": "AOK Test"}},
+                    "administrativ": {"patientenhinweise": ["Nuechtern erscheinen"]},
+                    "medizinische_uebersicht": {
+                        "allergien": [
+                            {"substanz": "Penicillin", "schweregrad": "mittel"}
+                        ],
+                        "risikofaktoren": {
+                            "bmi": 28.4,
+                            "rauchen": "nie",
+                            "alkohol": "gelegentlich",
+                            "familienanamnese": ["Vater: Hypertonie"],
+                        },
+                        "dauerdiagnosen": [
+                            {"bezeichnung": "Hypertonie", "icd10": "I10"}
+                        ],
+                        "akutdiagnosen": [
+                            {"bezeichnung": "Infekt", "icd10": "J06.9"}
+                        ],
+                        "medikation": {
+                            "dauermedikation": [
+                                {
+                                    "praeparat": "Ramipril 5 mg Tabletten",
+                                    "dosierung": "1-0-0",
+                                }
+                            ]
+                        },
+                    },
+                    "termine": {
+                        "naechster_termin": {
+                            "datum_uhrzeit": "2026-07-20T08:15:00+02:00",
+                            "art": "Kontrolle",
+                            "hinweis": "Bitte nuechtern kommen",
+                        },
+                        "offene_aufgaben": [
+                            {
+                                "faellig_am": "2026-07-20",
+                                "aufgabe": "Labor kontrollieren",
+                                "prioritaet": "normal",
+                            }
+                        ],
                     },
                 }
             },
@@ -46,6 +91,17 @@ class TestPatientListClient:
         assert patients[0].first_name == "Anna"
         assert patients[0].last_name == "Muster"
         assert patients[0].date_of_birth == "1985-03-14"
+        assert patients[0].medications == ["Ramipril"]
+        assert patients[0].details.gender == "weiblich"
+        assert patients[0].details.contact_city == "Mannheim"
+        assert patients[0].details.insurance == "AOK Test"
+        assert patients[0].details.long_term_diagnoses == ("Hypertonie (I10)",)
+        assert patients[0].details.acute_diagnoses == ("Infekt (J06.9)",)
+        assert patients[0].details.allergies == ("Penicillin (mittel)",)
+        assert patients[0].details.patient_notes == ("Nuechtern erscheinen",)
+        assert patients[0].details.open_tasks == (
+            "Labor kontrollieren - faellig 2026-07-20 - Prioritaet normal",
+        )
 
     def test_load_empty_list(self, tmp_path) -> None:
         path = self._write_json(tmp_path, [])

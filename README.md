@@ -80,6 +80,14 @@ python app/main.py
 
 Die Anwendung startet nun als lokale Weboberflaeche mit NiceGUI und ist standardmaessig unter `http://127.0.0.1:8080` erreichbar.
 
+Personalmodus starten:
+
+```bash
+python app/main_personal.py
+```
+
+Der Personalmodus startet standardmaessig unter `http://127.0.0.1:8081`. Dort kann Praxispersonal einen Patienten aus der Tagesliste auswaehlen, mehrere Szenarien vorbereiten und danach direkt den Patientenmodus mit bereits ausgewaehlten Szenarien starten. Eine erneute Patientenanmeldung ist in diesem Ablauf nicht noetig.
+
 ## Projektstruktur
 
 Wichtige Verzeichnisse und Dateien:
@@ -90,6 +98,8 @@ Wichtige Verzeichnisse und Dateien:
 - `app/devices/`: Geraetesimulatoren
 - `app/output/`: strukturierte Zusammenfassungen und Export
 - `app/ui/`: grafische Oberflaeche auf Basis von NiceGUI
+- `app/main.py`: Patienteneinstieg mit Selbstanmeldung und Szenarioauswahl
+- `app/main_personal.py`: Personaleinstieg mit Tagesliste, Detailansicht und vorbereiteter Szenarioauswahl
 
 ## Aktuell umgesetzt
 
