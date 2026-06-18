@@ -2363,11 +2363,11 @@ def _render_anamnesis_mode_choice(
                     _render_owl_avatar("listening", "small")
                     with ui.column().classes("gap-1"):
                         ui.label("Geführtes Gespräch").classes("text-lg font-semibold")
-                        ui.label("Avatar stellt die Anamnese-Fragen einzeln").classes(
+                        ui.label("Der Eulen-Avatar stellt die Anamnese-Fragen einzeln").classes(
                             "text-sm text-slate-500"
                         )
                 ui.label(
-                    "Der Button 'Bitte sprich mit mir' startet denselben Fragenkatalog wie unter 'Anamnese', aber als Schritt-für-Schritt-Dialog."
+                    "Der Button 'Bitte sprich mit mir' startet denselben Fragenkatalog wie unter 'Fragenformular', aber als Schritt-für-Schritt-Dialog."
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Bitte sprich mit mir",
@@ -2387,7 +2387,7 @@ def _render_anamnesis_mode_choice(
                             "text-sm text-slate-500"
                         )
                 ui.label(
-                    "Gut, wenn alles auf einmal sichtbar sein soll oder Angaben direkt vorausgefüllt und angepasst werden sollen."
+                    "Gut, wenn alle Fragen auf einmal sichtbar sein sollen oder Angaben direkt vorausgefüllt und angepasst werden sollen."
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Formular verwenden",
@@ -2408,7 +2408,7 @@ def _render_anamnesis_mode_toolbar(
 
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Anamnese-Modus").classes("eyebrow")
-        ui.label("Sie können jederzeit zwischen Gespraech und Formular wechseln.").classes(
+        ui.label("Sie können jederzeit zwischen Gespräch und Fragenformular wechseln.").classes(
             "text-sm leading-6 text-slate-600"
         )
         with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
@@ -2456,7 +2456,7 @@ def _render_symptom_chat(
                 "text-[0.74rem] font-bold uppercase tracking-[0.16em] opacity-75"
             )
             ui.label(
-                "Bitte schildern Sie mir in eigenen Worten Ihre aktuellen "
+                "Bitte schildern Sie mir in Ihren eigenen Worten Ihre aktuellen "
                 "Beschwerden und Symptome. Zum Beispiel: seit wann Sie die "
                 "Beschwerden haben, was genau Sie spüren, ob Sie Fieber haben, "
                 "welche Medikamente Sie nehmen usw.\n\n"
