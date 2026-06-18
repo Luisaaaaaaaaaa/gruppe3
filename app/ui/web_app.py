@@ -1731,10 +1731,8 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
             with ui.column().classes("gap-2"):
                 ui.label(ctrl.phase_label).classes("eyebrow")
-                ui.label("Assistierte Anamnese").classes("text-2xl font-semibold")
-                ui.label(
-                    f"Patient: {_format_patient_name(session.current_patient)}"
-                ).classes("text-[1rem] text-slate-600")
+                if session.anamnesis_mode is not None:
+                    ui.label("Assistierte Anamnese").classes("text-2xl font-semibold")
 
         if ctrl.state in (
             DialogueState.EXPLAIN_ROLE,
