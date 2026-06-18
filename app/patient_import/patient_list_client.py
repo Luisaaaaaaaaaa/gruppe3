@@ -203,14 +203,70 @@ class PatientListClient:
         return tasks
 
 
+    def append_patient(self, patient: PatientRecord) -> None:
+        patients = self.load_patients()
+        for i, p in enumerate(patients):
+            if p.patient_id == patient.patient_id:
+                patients[i] = patient
+                break
+        else:
+            patients.append(patient)
+        self._save_patients(patients)
+
+    def _save_patients(self, patients: list[PatientRecord]) -> None:
+        entries = []
+        for rec in patients:
+            entry = self._record_to_entry(rec)
+            entries.append(entry)
+        self._json_path.write_text(
+            json.dumps(entries, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _record_to_entry(rec: PatientRecord) -> dict:
+        return {
+            "schema_version": "1.0",
+            "source_system": {"name": "SET-Anamnese", "version": "1.0"},
+            "patient": {
+                "patient_id": rec.patient_id,
+                "status": rec.details.status or "aktiv",
+                "stammdaten": {
+                    "vorname": rec.first_name,
+                    "nachname": rec.last_name,
+                    "geburtsdatum": rec.date_of_birth,
+                    "geschlecht": rec.details.gender,
+                    "sprache": rec.details.language,
+                },
+                "kontakt": {
+                    "adresse": {
+                        "ort": rec.details.contact_city,
+                    },
+                    "telefon": rec.details.phone,
+                },
+                "versicherung": {
+                    "krankenkasse": {"name": rec.details.insurance},
+                },
+                "administrativ": {
+                    "patientenhinweise": [rec.details.notes] if rec.details.notes else [],
+                },
+                "medizinische_uebersicht": {
+                    "allergien": [],
+                    "risikofaktoren": {},
+                    "dauerdiagnosen": [],
+                    "akutdiagnosen": [],
+                    "medikation": {"dauermedikation": [], "bedarfsmedikation": []},
+                },
+                "termine": {
+                    "naechster_termin": None,
+                    "offene_aufgaben": [],
+                },
+            },
+        }
+
+
 def _extract_brand_name(praeparat: str) -> str:
-    """Extrahiert den Handelsnamen ohne Dosierung aus der Präparatbezeichnung.
-    Z.B. 'Metformin 1000 mg Filmtabletten' -> 'Metformin'
-         'Bisoprolol 2,5 mg Tabletten' -> 'Bisoprolol'
-         'Paracetamol 500 mg Tabletten' -> 'Paracetamol'
-    """
     name = praeparat.strip()
-    # Alles ab der ersten Ziffer (mit optionalem Komma/Punkt für Dezimaltrenner) entfernen
     name = re.sub(r"\s+\d+[.,]?\d*\s*(mg|g|µg|mcg|ml|ie|i\.e\.).*", "", name, flags=re.IGNORECASE)
     name = name.strip()
     return name

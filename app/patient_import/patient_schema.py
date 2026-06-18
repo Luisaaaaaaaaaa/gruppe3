@@ -8,6 +8,8 @@ class PatientDetails:
     language: str = ""
     contact_city: str = ""
     insurance: str = ""
+    phone: str = ""
+    notes: str = ""
     next_appointment_at: str = ""
     next_appointment_type: str = ""
     next_appointment_note: str = ""
@@ -24,9 +26,9 @@ class PatientDetails:
 @dataclass(frozen=True)
 class PatientRecord:
     patient_id: str
-    first_name: str
-    last_name: str
-    date_of_birth: str
+    first_name: str = ""
+    last_name: str = ""
+    date_of_birth: str = ""
     medications: list[str] = field(default_factory=list)
     conditions: str = ""
     details: PatientDetails = field(default_factory=PatientDetails)

@@ -26,7 +26,7 @@ from app.dialogue.dialogue_controller import DialogueController
 from app.dialogue.state_machine import DialogueState
 from app.identity.identity_check import IdentityCheck
 from app.patient_import.patient_list_client import PatientListClient
-from app.patient_import.patient_schema import PatientRecord
+from app.patient_import.patient_schema import PatientDetails, PatientRecord
 from app.output.export_pdf import export_summary_pdf
 
 MAX_ATTEMPTS = 3
@@ -1520,6 +1520,84 @@ def _handoff_to_patient(session: BrowserSession, refresh_ui: Callable[[], None])
     _start_scenarios(session, session.selected_scenarios, refresh_ui)
 
 
+def _generate_patient_id() -> str:
+    existing = [p.patient_id for p in PATIENTS if p.patient_id.startswith("MAN-")]
+    numbers = []
+    for pid in existing:
+        try:
+            numbers.append(int(pid.removeprefix("MAN-")))
+        except ValueError:
+            pass
+    next_num = max(numbers) + 1 if numbers else 1
+    return f"MAN-{next_num:04d}"
+
+
+def _open_new_patient_dialog(
+    session: BrowserSession,
+    refresh_ui: Callable[[], None],
+    edit_patient: PatientRecord | None = None,
+) -> None:
+    dialog = ui.dialog()
+    with dialog, ui.card().classes("w-[500px] max-w-full p-6"):
+        title = "Patient bearbeiten" if edit_patient else "Neuen Patienten anlegen"
+        ui.label(title).classes("text-xl font-semibold mb-4")
+        ui.label("Alle Felder sind optional.").classes("text-sm text-slate-500 mb-2")
+
+        vorname = ui.input("Vorname").props("outlined").classes("w-full")
+        nachname = ui.input("Nachname").props("outlined").classes("w-full")
+        geburtsdatum = ui.input("Geburtsdatum").props("outlined type=date").classes("w-full")
+        telefon = ui.input("Telefon").props("outlined").classes("w-full")
+        notizen = ui.textarea("Notizen").props("outlined").classes("w-full")
+
+        if edit_patient:
+            vorname.value = edit_patient.first_name
+            nachname.value = edit_patient.last_name
+            geburtsdatum.value = edit_patient.date_of_birth
+            telefon.value = edit_patient.details.phone
+            notizen.value = edit_patient.details.notes
+
+        with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            ui.button("Abbrechen", on_click=dialog.close).props("outline")
+
+            def save() -> None:
+                pid = edit_patient.patient_id if edit_patient else _generate_patient_id()
+                details = PatientDetails(
+                    phone=telefon.value or "",
+                    notes=notizen.value or "",
+                )
+                patient = PatientRecord(
+                    patient_id=pid,
+                    first_name=vorname.value or "",
+                    last_name=nachname.value or "",
+                    date_of_birth=geburtsdatum.value or "",
+                    details=details,
+                )
+
+                client = PatientListClient(
+                    Path("app/patient_import/patientenTagesliste.json")
+                )
+                client.append_patient(patient)
+                global PATIENTS
+                PATIENTS = client.load_patients()
+
+                dialog.close()
+                if not edit_patient:
+                    session.current_patient = patient
+                    session.selected_scenarios.clear()
+                    session.staff_search_query = ""
+                ui.notify(
+                    f"Patient {pid} {'aktualisiert' if edit_patient else 'angelegt'}.",
+                    color="positive",
+                )
+                refresh_ui()
+
+            ui.button("Speichern", on_click=save).props("unelevated").classes(
+                "bg-[#0f766e] text-white"
+            )
+
+    dialog.open()
+
+
 def _render_staff_selection(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -1591,26 +1669,40 @@ def _render_staff_selection(
                                 "Bitte prüfen Sie Schreibweise oder Geburtsdatum und versuchen Sie es erneut."
                             ).classes("text-sm leading-6 text-slate-600")
 
-            search_input = ui.input(
-                "Patient suchen (Name, Geburtsdatum oder Patienten-ID)",
-                value=session.staff_search_query,
-            ).props("outlined clearable").classes("w-full")
-            search_input.on(
-                "update:model-value",
-                lambda e: (
-                    setattr(session, "staff_search_query", e.args or ""),
-                    render_filtered_patient_list.refresh(),
-                ),
-            )
+            with ui.row().classes("w-full items-center gap-3"):
+                search_input = ui.input(
+                    "Patient suchen (Name, Geburtsdatum oder Patienten-ID)",
+                    value=session.staff_search_query,
+                ).props("outlined clearable").classes("grow")
+                search_input.on(
+                    "update:model-value",
+                    lambda e: (
+                        setattr(session, "staff_search_query", e.args or ""),
+                        render_filtered_patient_list.refresh(),
+                    ),
+                )
+
+                ui.button(
+                    "Neuer Patient +",
+                    on_click=lambda: _open_new_patient_dialog(session, refresh_ui),
+                ).props("unelevated").classes("bg-[#17603d] text-white whitespace-nowrap")
 
             render_filtered_patient_list()
         else:
             with ui.row().classes("w-full justify-between items-center gap-3 flex-wrap"):
                 ui.label("Ausgewählter Patient").classes("eyebrow")
-                ui.button(
-                    "Zur Tagesliste zurück",
-                    on_click=lambda: _back_to_staff_selection(session, refresh_ui),
-                ).props("outline")
+                with ui.row().classes("items-center gap-2"):
+                    ui.button(
+                        "Bearbeiten",
+                        on_click=lambda: _open_new_patient_dialog(
+                            session, refresh_ui,
+                            edit_patient=session.current_patient,
+                        ),
+                    ).props("outline")
+                    ui.button(
+                        "Zur Tagesliste zurück",
+                        on_click=lambda: _back_to_staff_selection(session, refresh_ui),
+                    ).props("outline")
 
             _render_selected_patient_preview(selected_patient)
 
