@@ -12,7 +12,7 @@ try:
     from nicegui import ui
 except ModuleNotFoundError as exc:
     raise RuntimeError(
-        "NiceGUI ist nicht installiert. Bitte zuerst 'pip install -r requirements.txt' ausfuehren."
+        "NiceGUI ist nicht installiert. Bitte zuerst 'pip install -r requirements.txt' ausführen."
     ) from exc
 
 from app.ai.symptom_extractor import extract_answers
@@ -30,7 +30,7 @@ from app.patient_import.patient_schema import PatientRecord
 from app.output.export_pdf import export_summary_pdf
 
 MAX_ATTEMPTS = 3
-PAGE_TITLE = "SET Patientenanmeldung"
+PAGE_TITLE = "KI-gestützter Anamnese-Agent"
 PERSONAL_PAGE_TITLE = "SET Personalmodus"
 PATIENT_MODE = "patient"
 PERSONAL_MODE = "personal"
@@ -510,14 +510,14 @@ SCENARIOS = [
         "key": "B",
         "title": "Brustschmerz",
         "subtitle": "Hausarztpraxisnahes Triage-Szenario",
-        "description": "Schmerzcharakter, Ausstrahlung, Belastungsabhaengigkeit und Warnzeichen dokumentieren.",
+        "description": "Schmerzcharakter, Ausstrahlung, Belastungsabhängigkeit und Warnzeichen dokumentieren.",
         "icon": "monitor_heart",
         "tone": "tone-danger",
     },
     {
         "key": "C",
         "title": "Hypertonie-Kontrolle",
-        "subtitle": "Auffaelliger Blutdruckwert",
+        "subtitle": "Auffälliger Blutdruckwert",
         "description": "Blutdruck, Begleitsymptome, Medikation und Risikofaktoren gezielt abfragen.",
         "icon": "favorite",
         "tone": "tone-warning",
@@ -563,6 +563,7 @@ class BrowserSession:
     pending_input: Callable[[str], None] | None = None
     editing_answers: bool = False
     show_cancel_dialog: bool = False
+    show_reject_consent_dialog: bool = False
     login_blocked_until: float | None = None
     avatar_messages: list[ChatEntry] = field(default_factory=list)
     chat_input_text: str = ""
@@ -591,6 +592,7 @@ class BrowserSession:
         self.pending_input = None
         self.editing_answers = False
         self.show_cancel_dialog = False
+        self.show_reject_consent_dialog = False
         self.login_blocked_until = None
         self.avatar_messages.clear()
         self.chat_input_text = ""
@@ -678,7 +680,7 @@ def _get_process_steps(session: BrowserSession) -> list[tuple[str, str]]:
     if session.is_personal_mode:
         labels = [
             "Tagesliste",
-            "Identitaet",
+            "Identität",
             "Einwilligung",
             "Anamnese",
             "Auswertung",
@@ -736,7 +738,7 @@ def _format_detail_value(raw_value: str) -> str:
         return "keine Angabe"
     mapping = {
         "weiblich": "Weiblich",
-        "maennlich": "Maennlich",
+        "männlich": "Männlich",
         "divers": "Divers",
         "de": "Deutsch",
         "aktiv": "Aktiv",
@@ -795,25 +797,62 @@ def _handle_consent(
     if session.pending_input is None:
         return
 
-    consent_value = "ja" if answer == "ja" else "nein"
-
-    for ctrl in session.controllers:
-        if ctrl.state == DialogueState.REQUEST_CONSENT:
-            if consent_value == "ja":
+    if answer == "ja":
+        consent_value = "ja"
+        for ctrl in session.controllers:
+            if ctrl.state == DialogueState.REQUEST_CONSENT:
                 ctrl._display(CONSENT_ACCEPTED)
                 ctrl._state_machine.advance()
                 ctrl._handle_state()
-            else:
-                ctrl._display(CONSENT_DECLINED)
-                ctrl._state_machine.jump_to(DialogueState.END)
-                ctrl._handle_state()
 
+        callback = session.pending_input
+        session.pending_input = None
+        session.messages.append(
+            ChatEntry(role="user", text="Ja", tone="user")
+        )
+        callback(consent_value)
+        refresh_ui()
+    else:
+        session.show_reject_consent_dialog = True
+        refresh_ui()
+
+
+def _confirm_reject_consent(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.show_reject_consent_dialog = False
+    for ctrl in session.controllers:
+        if ctrl.state == DialogueState.REQUEST_CONSENT:
+            ctrl._display(CONSENT_DECLINED)
+            ctrl._state_machine.jump_to(DialogueState.END)
+            ctrl._handle_state()
     callback = session.pending_input
     session.pending_input = None
     session.messages.append(
-        ChatEntry(role="user", text=consent_value.capitalize(), tone="user")
+        ChatEntry(role="user", text="Nein", tone="user")
     )
-    callback(consent_value)
+    if callback:
+        callback("nein")
+    session.controller = None
+    session.controllers.clear()
+    session.selected_scenarios.clear()
+    session.messages.clear()
+    session.anamnesis_mode = None
+    session.chat_phase_done = False
+    session.prefilled_answers.clear()
+    session.current_patient = None
+    session.login_message = ""
+    session.login_tone = "tone-info"
+    session.attempts_left = MAX_ATTEMPTS
+    session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
+    session.stage = "login"
+    refresh_ui()
+
+
+def _dismiss_reject_consent_dialog(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    session.show_reject_consent_dialog = False
     refresh_ui()
 
 
@@ -930,7 +969,7 @@ def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
             "icon": "sentiment_satisfied",
             "tone": "calm",
             "title": "Eulen-Assistent",
-            "subtitle": "Bereit fuer die Voranamnese.",
+            "subtitle": "Bereit für die Voranamnese.",
         }
 
     if ctrl.state == DialogueState.REQUEST_CONSENT:
@@ -938,7 +977,7 @@ def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
             "icon": "waving_hand",
             "tone": "calm",
             "title": "Eulen-Assistent",
-            "subtitle": "Ich erklaere Ihnen kurz den Ablauf.",
+            "subtitle": "Ich erkläre Ihnen kurz den Ablauf.",
         }
 
     if ctrl.state == DialogueState.ANAMNESIS:
@@ -953,7 +992,7 @@ def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
             "icon": "forum",
             "tone": "thinking",
             "title": "Eulen-Assistent",
-            "subtitle": "Sie koennen Formular oder gefuehrtes Gespraech waehlen.",
+            "subtitle": "Sie können Formular oder geführtes Gespräch wählen.",
         }
 
     if ctrl.state in (DialogueState.RED_FLAG_CHECK, DialogueState.ESCALATION):
@@ -1134,7 +1173,6 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
 def main_page(
     entry_mode: str = PATIENT_MODE,
     page_title: str = PAGE_TITLE,
-    hero_text: str | None = None,
 ) -> None:
     ui.colors(
         primary="#0f766e",
@@ -1159,15 +1197,9 @@ def main_page(
     with ui.column().classes("app-shell gap-6"):
         @ui.refreshable
         def render_header() -> None:
-            with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
-                with ui.column().classes("gap-2"):
-                    ui.label("SET Semesterprojekt").classes("eyebrow")
-                    ui.label(page_title).classes("hero-title text-4xl font-bold")
-                    ui.label(
-                        hero_text
-                        or "Lokale Mehrbenutzer-Oberflaeche fuer strukturierte Voranamnese mit synthetischen Daten."
-                    ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
-
+            with ui.column().classes("gap-2"):
+                ui.label("SET Semesterprojekt").classes("eyebrow")
+                ui.label(page_title).classes("hero-title text-4xl font-bold")
                 with ui.row().classes("gap-2 flex-wrap"):
                     for label, status in _get_process_steps(session):
                         ui.label(label).classes(f"status-chip status-chip--{status}")
@@ -1191,6 +1223,7 @@ def main_page(
 
                     _render_cancel_overlay(session, refresh_ui)
                     _render_login_blocked_overlay(session, refresh_ui)
+                    _render_reject_consent_overlay(session, refresh_ui)
 
                 render_main()
 
@@ -1206,8 +1239,8 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
         if session.is_personal_mode and session.current_patient is not None:
             ui.label("Patientenbestaetigung").classes("text-2xl font-semibold")
             ui.label(
-                "Das Praxispersonal hat Sie bereits aus der Tagesliste ausgewaehlt. "
-                "Bitte bestaetigen Sie jetzt Name und Geburtsdatum, damit die vorbereiteten Szenarien starten koennen."
+                "Das Praxispersonal hat Sie bereits aus der Tagesliste ausgewählt. "
+                "Bitte bestätigen Sie jetzt Name und Geburtsdatum, damit die vorbereiteten Szenarien starten können."
             ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
             _render_summary_section(
                 "Vorbereitung durch Praxispersonal",
@@ -1226,11 +1259,11 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             ui.label("Patientenanmeldung").classes("text-2xl font-semibold")
             ui.label(
                 "Bitte melden Sie sich mit Vorname, Nachname und Geburtsdatum an. "
-                "Das System dient ausschliesslich der strukturierten Vorbereitung fuer aerztliches Personal."
+                "Das System dient ausschließlich der strukturierten Vorbereitung für ärztliches Personal."
             ).classes("max-w-3xl text-[1rem] leading-7 text-slate-600")
 
         ui.label(
-            f"Verfuegbare Anmeldeversuche: {session.attempts_left}"
+            f"Verfügbare Anmeldeversuche: {session.attempts_left}"
         ).classes("status-chip tone-info w-fit")
 
         if session.login_message:
@@ -1261,7 +1294,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                 return
 
             if not (first_name.value or "").strip() or not (last_name.value or "").strip():
-                session.login_message = "Vorname und Nachname muessen ausgefuellt werden."
+                session.login_message = "Vorname und Nachname müssen ausgefüllt werden."
                 session.login_tone = "tone-danger"
                 refresh_ui()
                 return
@@ -1296,7 +1329,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                     on_click=lambda: _back_to_staff_selection(session, refresh_ui),
                 ).props("outline")
             else:
-                ui.button("Zuruecksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
+                ui.button("Zurücksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
                     "outline"
                 )
             ui.button("Anmelden", on_click=submit_login).props("unelevated").classes(
@@ -1357,9 +1390,6 @@ def _render_scenario_selection(
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         ui.label("Szenarien auswählen").classes("text-2xl font-semibold")
-        ui.label(
-            f"Angemeldet: {_format_patient_name(session.current_patient)}"
-        ).classes("text-[1rem] text-slate-600")
 
         if recommended_ui_key:
             ui.label(
@@ -1449,7 +1479,7 @@ def _render_selected_patient_preview(patient: PatientRecord) -> None:
     details = patient.details
     with ui.column().classes("w-full gap-4"):
         _render_summary_section(
-            "Kurzuebersicht",
+            "Kurzübersicht",
             {
                 "Patient": _format_patient_name(patient),
                 "Geburtsdatum": _format_display_date(patient.date_of_birth),
@@ -1457,7 +1487,7 @@ def _render_selected_patient_preview(patient: PatientRecord) -> None:
                 "Status": _format_detail_value(details.status),
                 "Wohnort": _format_detail_value(details.contact_city),
                 "Versicherung": _format_detail_value(details.insurance),
-                "Naechster Termin": _format_next_appointment(patient),
+                "Nächster Termin": _format_next_appointment(patient),
             },
         )
         _render_summary_section(
@@ -1481,10 +1511,10 @@ def _render_selected_patient_preview(patient: PatientRecord) -> None:
 
 def _handoff_to_patient(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     if session.current_patient is None:
-        ui.notify("Bitte waehlen Sie zuerst einen Patienten aus.", color="warning")
+        ui.notify("Bitte wählen Sie zuerst einen Patienten aus.", color="warning")
         return
     if not session.selected_scenarios:
-        ui.notify("Bitte waehlen Sie mindestens ein Szenario aus.", color="warning")
+        ui.notify("Bitte wählen Sie mindestens ein Szenario aus.", color="warning")
         return
 
     _start_scenarios(session, session.selected_scenarios, refresh_ui)
@@ -1499,8 +1529,8 @@ def _render_staff_selection(
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         ui.label("Praxispersonal: Tagesliste und Szenarien").classes("text-2xl font-semibold")
         ui.label(
-            "Waehlen Sie einen Patienten aus der Tagesliste aus und markieren Sie alle Szenarien, "
-            "die fuer die assistierte Anamnese vorbereitet werden sollen. Danach startet direkt der Patientenmodus "
+            "Wählen Sie einen Patienten aus der Tagesliste aus und markieren Sie alle Szenarien, "
+            "die für die assistierte Anamnese vorbereitet werden sollen. Danach startet direkt der Patientenmodus "
             "mit den vorbereiteten Szenarien, ohne erneute Anmeldung."
         ).classes("max-w-4xl text-[1rem] leading-7 text-slate-600")
 
@@ -1536,21 +1566,21 @@ def _render_staff_selection(
                                             f"Empfohlen: Szenario {patient_recommendation}"
                                         ).classes("status-chip tone-success")
                                     ui.button(
-                                        "Auswaehlen",
+                                        "Auswählen",
                                         on_click=lambda patient=patient: _select_patient_for_personal_mode(
                                             session, patient, refresh_ui
                                         ),
                                     ).props("unelevated").classes("min-w-[130px]")
 
                             _render_summary_section(
-                                "Kurzuebersicht",
+                                "Kurzübersicht",
                                 {
                                     "Dauerdiagnosen": _summarize_values(
                                         patient.details.long_term_diagnoses
                                     ),
                                     "Medikation": _summarize_values(patient.medications),
                                     "Risikofaktoren": _summarize_values(patient.details.risk_factors),
-                                    "Naechster Termin": _format_next_appointment(patient),
+                                    "Nächster Termin": _format_next_appointment(patient),
                                 },
                             )
 
@@ -1558,7 +1588,7 @@ def _render_staff_selection(
                         with ui.card().classes("surface-card w-full shadow-none"):
                             ui.label("Kein Patient gefunden").classes("text-lg font-semibold")
                             ui.label(
-                                "Bitte pruefen Sie Schreibweise oder Geburtsdatum und versuchen Sie es erneut."
+                                "Bitte prüfen Sie Schreibweise oder Geburtsdatum und versuchen Sie es erneut."
                             ).classes("text-sm leading-6 text-slate-600")
 
             search_input = ui.input(
@@ -1576,9 +1606,9 @@ def _render_staff_selection(
             render_filtered_patient_list()
         else:
             with ui.row().classes("w-full justify-between items-center gap-3 flex-wrap"):
-                ui.label("Ausgewaehlter Patient").classes("eyebrow")
+                ui.label("Ausgewählter Patient").classes("eyebrow")
                 ui.button(
-                    "Zur Tagesliste zurueck",
+                    "Zur Tagesliste zurück",
                     on_click=lambda: _back_to_staff_selection(session, refresh_ui),
                 ).props("outline")
 
@@ -1586,7 +1616,7 @@ def _render_staff_selection(
 
             if recommended_ui_key:
                 ui.label(
-                    f"Automatisch vorausgewaehlt: Szenario {recommended_ui_key}"
+                    f"Automatisch vorausgewählt: Szenario {recommended_ui_key}"
                 ).classes("status-chip tone-success w-fit")
 
             with ui.card().classes("surface-card w-full shadow-none"):
@@ -1622,7 +1652,7 @@ def _render_staff_selection(
                                         "text-sm leading-6 text-slate-600"
                                     )
                                 checkbox = ui.checkbox(
-                                    "Fuer den Patienten vorbereiten",
+                                    "Für den Patienten vorbereiten",
                                     value=is_checked,
                                 )
                                 checkbox.on(
@@ -2174,6 +2204,42 @@ def _render_login_blocked_overlay(
     ui.timer(1, once=True, callback=refresh_ui)
 
 
+def _render_reject_consent_overlay(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if not session.show_reject_consent_dialog:
+        return
+
+    with ui.element("div").classes("fixed inset-0 bg-black/40 z-50"):
+        with ui.card().classes(
+            "surface-card shadow-none border-2 border-[#9f1d20]"
+        ).style(
+            "position: fixed; top: 50%; left: 50%; "
+            "transform: translate(-50%, -50%); z-index: 51;"
+        ):
+            ui.label("Zustimmung verweigern").classes("text-lg font-semibold")
+            ui.label(
+                "Sind Sie sicher, dass Sie der Anamnese nicht zustimmen möchten?\n"
+                "Ohne Ihre Zustimmung kann die Anamnese nicht durchgeführt werden.\n\n"
+                "Bitte wenden Sie sich an das Praxispersonal."
+            ).classes(
+                "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+            )
+            with ui.row().classes("w-full gap-3 justify-center mt-4"):
+                ui.button(
+                    "Ja, ablehnen",
+                    on_click=lambda: _confirm_reject_consent(session, refresh_ui),
+                ).props("unelevated").classes(
+                    "bg-[#9f1d20] text-white min-w-[140px]"
+                )
+                ui.button(
+                    "Nein, zurück",
+                    on_click=lambda: _dismiss_reject_consent_dialog(session, refresh_ui),
+                ).props("outline").classes(
+                    "border-[rgba(159,29,32,0.25)] text-[#9f1d20] min-w-[140px]"
+                )
+
+
 def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     avatar = _get_avatar_state(session)
 
@@ -2219,7 +2285,7 @@ def _render_speech_input_controls(target_input_id: str) -> None:
             "text-[#0f766e]"
         )
         mic_status = ui.label(
-            "Antwort alternativ per Spracheingabe ausfuellen."
+            "Antwort alternativ per Spracheingabe ausfüllen."
         ).classes("text-xs text-slate-500")
 
     mic_recording = {"active": False}
@@ -2229,7 +2295,7 @@ def _render_speech_input_controls(target_input_id: str) -> None:
         (() => {{
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SR) {{
-                alert('Spracheingabe nicht unterstuetzt. Bitte Chrome oder Edge verwenden.');
+                alert('Spracheingabe nicht unterstützt. Bitte Chrome oder Edge verwenden.');
                 return;
             }}
             const r = new SR();
@@ -2260,7 +2326,7 @@ def _render_speech_input_controls(target_input_id: str) -> None:
         }})()
         """)
         mic_recording["active"] = True
-        mic_status.set_text("Aufnahme laeuft... Nochmal klicken zum Stoppen.")
+        mic_status.set_text("Aufnahme läuft... Nochmal klicken zum Stoppen.")
         mic_button._props["icon"] = "stop"
         mic_button._props["color"] = "negative"
         mic_button.update()
@@ -2286,11 +2352,11 @@ def _render_anamnesis_mode_choice(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
-        ui.label("Wie moechten Sie die Anamnese durchfuehren?").classes(
+        ui.label("Wie möchten Sie die Anamnese durchführen?").classes(
             "text-2xl font-semibold"
         )
         ui.label(
-            "Sie koennen die Fragen klassisch als Formular beantworten oder sich vom Assistenten nacheinander durch die Anamnese fuehren lassen."
+            "Sie können die Fragen klassisch als Formular beantworten oder sich vom Assistenten nacheinander durch die Anamnese führen lassen."
         ).classes("text-[1rem] leading-7 text-slate-600")
 
         with ui.row().classes("w-full gap-4 flex-wrap mt-2"):
@@ -2298,12 +2364,12 @@ def _render_anamnesis_mode_choice(
                 with ui.row().classes("items-center gap-3"):
                     _render_owl_avatar("listening", "small")
                     with ui.column().classes("gap-1"):
-                        ui.label("Gefuehrtes Gespraech").classes("text-lg font-semibold")
+                        ui.label("Geführtes Gespräch").classes("text-lg font-semibold")
                         ui.label("Avatar stellt die Anamnese-Fragen einzeln").classes(
                             "text-sm text-slate-500"
                         )
                 ui.label(
-                    "Der Button 'Bitte sprich mit mir' startet denselben Fragenkatalog wie unter 'Anamnese', aber als Schritt-fuer-Schritt-Dialog."
+                    "Der Button 'Bitte sprich mit mir' startet denselben Fragenkatalog wie unter 'Anamnese', aber als Schritt-für-Schritt-Dialog."
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Bitte sprich mit mir",
@@ -2323,7 +2389,7 @@ def _render_anamnesis_mode_choice(
                             "text-sm text-slate-500"
                         )
                 ui.label(
-                    "Gut, wenn alles auf einmal sichtbar sein soll oder Angaben direkt vorausgefuellt und angepasst werden sollen."
+                    "Gut, wenn alles auf einmal sichtbar sein soll oder Angaben direkt vorausgefüllt und angepasst werden sollen."
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Formular verwenden",
@@ -2344,7 +2410,7 @@ def _render_anamnesis_mode_toolbar(
 
     with ui.card().classes("surface-card w-full shadow-none"):
         ui.label("Anamnese-Modus").classes("eyebrow")
-        ui.label("Sie koennen jederzeit zwischen Gespraech und Formular wechseln.").classes(
+        ui.label("Sie können jederzeit zwischen Gespraech und Formular wechseln.").classes(
             "text-sm leading-6 text-slate-600"
         )
         with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
@@ -2394,10 +2460,10 @@ def _render_symptom_chat(
             ui.label(
                 "Bitte schildern Sie mir in eigenen Worten Ihre aktuellen "
                 "Beschwerden und Symptome. Zum Beispiel: seit wann Sie die "
-                "Beschwerden haben, was genau Sie spueren, ob Sie Fieber haben, "
+                "Beschwerden haben, was genau Sie spüren, ob Sie Fieber haben, "
                 "welche Medikamente Sie nehmen usw.\n\n"
                 "Ihre Angaben werden automatisch ausgewertet und der Fragebogen "
-                "wird so weit wie moeglich vorausgefuellt. Offene Fragen koennen "
+                "wird so weit wie möglich vorausgefüllt. Offene Fragen können "
                 "Sie danach noch beantworten."
             ).classes("whitespace-pre-wrap text-[0.97rem] leading-7")
 
@@ -2419,7 +2485,7 @@ def _render_symptom_chat(
             ui.run_javascript(f"""
             (() => {{
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SR) {{ alert('Spracheingabe nicht unterstuetzt. Bitte Chrome oder Edge verwenden.'); return; }}
+                if (!SR) {{ alert('Spracheingabe nicht unterstützt. Bitte Chrome oder Edge verwenden.'); return; }}
                 const r = new SR();
                 r.lang = 'de-DE';
                 r.continuous = true;
@@ -2448,7 +2514,7 @@ def _render_symptom_chat(
             }})()
             """)
             mic_recording["active"] = True
-            mic_status.set_text("Aufnahme laeuft... Nochmal klicken zum Stoppen.")
+            mic_status.set_text("Aufnahme läuft... Nochmal klicken zum Stoppen.")
             mic_button._props["icon"] = "stop"
             mic_button._props["color"] = "negative"
             mic_button.update()
@@ -2481,7 +2547,7 @@ def _render_symptom_chat(
                 return
 
             questions = [q for q, _ in ctrl.get_questions_with_answers()]
-            ui.notify("KI-Auswertung laeuft...", color="info", position="top")
+            ui.notify("KI-Auswertung läuft...", color="info", position="top")
             prefilled = extract_answers(text, questions)
             session.prefilled_answers = prefilled
             session.chat_phase_done = True
@@ -2682,7 +2748,7 @@ def _render_answer_editor(
         title="Antworten bearbeiten",
         description=(
             "Alle Fragen auf einen Blick. Aenderungen werden nach dem Speichern "
-            "in die Zusammenfassung uebernommen."
+            "in die Zusammenfassung übernommen."
         ),
         submit_label="Speichern",
         submit_callback=_on_submit,
@@ -2861,16 +2927,10 @@ def run_app(
     port: int = 8080,
     title: str = PAGE_TITLE,
 ) -> None:
-    hero_text = (
-        "Praxispersonal waehlt Patient und Szenarien aus, danach startet direkt die vorbereitete Anamnese im Patientenmodus."
-        if entry_mode == PERSONAL_MODE
-        else "Lokale Mehrbenutzer-Oberflaeche fuer strukturierte Voranamnese mit synthetischen Daten."
-    )
     ui.run(
         root=lambda: main_page(
             entry_mode=entry_mode,
             page_title=title,
-            hero_text=hero_text,
         ),
         host="127.0.0.1",
         port=port,
