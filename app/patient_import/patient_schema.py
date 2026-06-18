@@ -18,6 +18,7 @@ class PatientDetails:
     medication_details: tuple[str, ...] = ()
     patient_notes: tuple[str, ...] = ()
     open_tasks: tuple[str, ...] = ()
+    groesse_cm: int = 173
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
+
+from app.devices.simulators import Simulator
 from pathlib import Path
 from typing import Callable
 
@@ -568,6 +570,9 @@ class BrowserSession:
     chat_phase_done: bool = False
     anamnesis_mode: str | None = None
     speech_enabled: bool = True
+    simulated_bp: dict | None = None
+    simulated_weight: dict | None = None
+    simulated_oximeter: dict | None = None
     spoken_message_count: int = 0
     staff_search_query: str = ""
 
@@ -593,6 +598,9 @@ class BrowserSession:
         self.chat_phase_done = False
         self.anamnesis_mode = None
         self.speech_enabled = True
+        self.simulated_bp = None
+        self.simulated_weight = None
+        self.simulated_oximeter = None
         self.spoken_message_count = 0
         self.staff_search_query = ""
 
@@ -1653,6 +1661,9 @@ def _start_scenarios(
     session.controllers.clear()
     session.messages.clear()
     session.pending_input = None
+    session.simulated_bp = None
+    session.simulated_weight = None
+    session.simulated_oximeter = None
     session.avatar_messages.clear()
     session.chat_input_text = ""
     session.prefilled_answers.clear()
@@ -2694,14 +2705,7 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         ui.label(_format_patient_name(session.current_patient)).classes(
             "text-xl font-semibold"
         )
-        if session.is_personal_mode:
-            ui.label(
-                "Diese Browser-Sitzung startet im Personalmodus und wechselt danach direkt in die vorbereitete Anamnese."
-            ).classes("text-sm leading-6 text-slate-600")
-        else:
-            ui.label(
-                "Jede Browser-Sitzung fuehrt ihren eigenen Login- und Dialogzustand."
-            ).classes("text-sm leading-6 text-slate-600")
+
 
         if session.current_patient is not None:
             ui.label(f"Patienten-ID: {session.current_patient.patient_id}").classes(
@@ -2731,6 +2735,45 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 ).props("outline").classes("grow")
 
     _render_avatar(session, refresh_ui)
+
+    if ctrl is not None and ctrl.state.value >= DialogueState.ANAMNESIS.value:
+        with ui.card().classes("surface-card w-full shadow-none"):
+            ui.label("Gerätesimulatoren").classes("eyebrow")
+
+            with ui.column().classes("w-full gap-1 mt-2"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("Blutdruck").classes("text-sm font-semibold")
+                    ui.button("Simulieren", icon="monitor_heart",
+                              on_click=lambda: _simulate_bp(session, refresh_ui)
+                              ).props("dense outline")
+                if session.simulated_bp:
+                    ui.label(
+                        f"{session.simulated_bp['systolisch']}/{session.simulated_bp['diastolisch']} mmHg"
+                    ).classes("text-sm text-slate-600 ml-2")
+
+            with ui.column().classes("w-full gap-1"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("Gewicht").classes("text-sm font-semibold")
+                    ui.button("Simulieren",
+                              on_click=lambda: _simulate_weight(session, refresh_ui)
+                              ).props("dense outline")
+                if session.simulated_weight:
+                    ui.label(
+                        f"{session.simulated_weight['gewicht']} kg "
+                        f"(BMI: {session.simulated_weight['bmi']}, {session.simulated_weight['klasse']})"
+                    ).classes("text-sm text-slate-600 ml-2")
+
+            with ui.column().classes("w-full gap-1"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("Pulsoximeter").classes("text-sm font-semibold")
+                    ui.button("Simulieren",
+                              on_click=lambda: _simulate_oximeter(session, refresh_ui)
+                              ).props("dense outline")
+                if session.simulated_oximeter:
+                    ui.label(
+                        f"SpO\u2082: {session.simulated_oximeter['spo2']}%, "
+                        f"Puls: {session.simulated_oximeter['puls']} bpm"
+                    ).classes("text-sm text-slate-600 ml-2")
 
     if ctrl is not None and ctrl.export_path is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
@@ -2762,6 +2805,56 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                     ).props("outline").classes(
                         "w-full border-[var(--app-accent)] text-[var(--app-accent)]"
                     )
+
+def _calculate_age(birth_date_str: str) -> int:
+    if not birth_date_str:
+        return 38
+    try:
+        born = date.fromisoformat(birth_date_str)
+        today = date.today()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    except ValueError:
+        return 38
+
+
+def _simulate_bp(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    if session.current_patient is None:
+        return
+    p = session.current_patient
+    sim = Simulator(
+        geschlecht=p.details.gender,
+        groesse_cm=p.details.groesse_cm,
+        alter=_calculate_age(p.date_of_birth),
+    )
+    session.simulated_bp = sim.blutdruck()
+    refresh_ui()
+
+
+def _simulate_weight(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    if session.current_patient is None:
+        return
+    p = session.current_patient
+    sim = Simulator(
+        geschlecht=p.details.gender,
+        groesse_cm=p.details.groesse_cm,
+        alter=_calculate_age(p.date_of_birth),
+    )
+    session.simulated_weight = sim.gewicht()
+    refresh_ui()
+
+
+def _simulate_oximeter(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
+    if session.current_patient is None:
+        return
+    p = session.current_patient
+    sim = Simulator(
+        geschlecht=p.details.gender,
+        groesse_cm=p.details.groesse_cm,
+        alter=_calculate_age(p.date_of_birth),
+    )
+    session.simulated_oximeter = sim.pulsoximeter()
+    refresh_ui()
+
 
 def run_app(
     entry_mode: str = PATIENT_MODE,
