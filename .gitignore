@@ -1,5 +1,6 @@
 .claude/
 .venv/
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,7 +13,7 @@ htmlcov/
 dist/
 build/
 
-output/
+/output/
 
 .env
 *.log
