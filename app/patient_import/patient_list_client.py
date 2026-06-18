@@ -322,6 +322,16 @@ def _parse_medication(
 ) -> dict:
     dauer = []
     bedarf = []
+    if not details and brand_names:
+        for name in brand_names:
+            dauer.append({
+                "wirkstoff": name,
+                "praeparat": name,
+                "dosierung": "",
+                "hinweis": "",
+            })
+        return {"dauermedikation": dauer, "bedarfsmedikation": bedarf}
+
     brands_iter = iter(brand_names)
     for entry in details:
         section = "Bedarf" if entry.startswith("Bedarf: ") else "Dauer"

@@ -1538,56 +1538,112 @@ def _open_new_patient_dialog(
     edit_patient: PatientRecord | None = None,
 ) -> None:
     dialog = ui.dialog()
-    dialog_style = "w-[540px] max-w-full p-6"
+    dialog_style = "w-[600px] max-w-full p-6"
     with dialog, ui.card().classes(dialog_style):
         title = "Patient bearbeiten" if edit_patient else "Neuen Patienten anlegen"
         ui.label(title).classes("text-xl font-semibold mb-4")
         ui.label("Alle Felder sind optional.").classes("text-sm text-slate-500 mb-2")
 
-        vorname = ui.input("Vorname").props("outlined").classes("w-full")
-        nachname = ui.input("Nachname").props("outlined").classes("w-full")
-        geburtsdatum = ui.input("Geburtsdatum").props("outlined type=date").classes("w-full")
-        telefon = ui.input("Telefon").props("outlined").classes("w-full")
+        # --- Stammdaten ---
+        with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
+            ui.label("Stammdaten").classes("text-base font-semibold mb-2")
+            vorname = ui.input("Vorname").props("outlined").classes("w-full")
+            nachname = ui.input("Nachname").props("outlined").classes("w-full")
+            geburtsdatum = ui.input("Geburtsdatum").props("outlined type=date").classes("w-full")
+            telefon = ui.input("Telefon").props("outlined").classes("w-full")
 
+            if edit_patient:
+                with ui.row().classes("w-full gap-3"):
+                    with ui.column().classes("grow gap-0"):
+                        geschlecht = ui.select(
+                            ["", "männlich", "weiblich", "divers"],
+                            label="Geschlecht",
+                            value=edit_patient.details.gender,
+                        ).props("outlined").classes("w-full")
+                    with ui.column().classes("grow gap-0"):
+                        groesse = ui.input(
+                            "Größe (cm)",
+                            value=str(edit_patient.details.groesse_cm or ""),
+                        ).props("outlined type=number").classes("w-full")
+                sprache = ui.input(
+                    "Sprache",
+                    value=edit_patient.details.language,
+                ).props("outlined").classes("w-full")
+                wohnort = ui.input(
+                    "Wohnort",
+                    value=edit_patient.details.contact_city,
+                ).props("outlined").classes("w-full")
+                versicherung = ui.input(
+                    "Versicherung",
+                    value=edit_patient.details.insurance,
+                ).props("outlined").classes("w-full")
+            else:
+                geschlecht = None  # type: ignore[assignment]
+                groesse = None
+                sprache = None
+                wohnort = None
+                versicherung = None
+
+            if edit_patient:
+                vorname.value = edit_patient.first_name
+                nachname.value = edit_patient.last_name
+                geburtsdatum.value = edit_patient.date_of_birth
+                telefon.value = edit_patient.details.phone
+
+        # --- Kurzinfos (nur im Bearbeiten-Modus) ---
         if edit_patient:
-            with ui.row().classes("w-full gap-3"):
-                with ui.column().classes("grow gap-0"):
-                    geschlecht = ui.select(
-                        ["", "männlich", "weiblich", "divers"],
-                        label="Geschlecht",
-                        value=edit_patient.details.gender,
-                    ).props("outlined").classes("w-full")
-                with ui.column().classes("grow gap-0"):
-                    groesse = ui.input(
-                        "Größe (cm)",
-                        value=str(edit_patient.details.groesse_cm or ""),
-                    ).props("outlined type=number").classes("w-full")
-            sprache = ui.input(
-                "Sprache",
-                value=edit_patient.details.language,
-            ).props("outlined").classes("w-full")
-            wohnort = ui.input(
-                "Wohnort",
-                value=edit_patient.details.contact_city,
-            ).props("outlined").classes("w-full")
-            versicherung = ui.input(
-                "Versicherung",
-                value=edit_patient.details.insurance,
-            ).props("outlined").classes("w-full")
+            with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
+                ui.label("Kurzinfos (ein Eintrag pro Zeile)").classes("text-base font-semibold mb-2")
+                with ui.row().classes("w-full gap-3"):
+                    with ui.column().classes("grow gap-0"):
+                        dauerdiagnosen = ui.textarea(
+                            "Dauerdiagnosen",
+                            value="\n".join(edit_patient.details.long_term_diagnoses),
+                        ).props("outlined").classes("w-full")
+                    with ui.column().classes("grow gap-0"):
+                        medikation = ui.textarea(
+                            "Medikation",
+                            value="\n".join(edit_patient.medications),
+                        ).props("outlined").classes("w-full")
+                with ui.row().classes("w-full gap-3"):
+                    with ui.column().classes("grow gap-0"):
+                        risikofaktoren = ui.textarea(
+                            "Risikofaktoren",
+                            value="\n".join(edit_patient.details.risk_factors),
+                        ).props("outlined").classes("w-full")
+                    with ui.column().classes("grow gap-0"):
+                        allergien = ui.textarea(
+                            "Allergien",
+                            value="\n".join(edit_patient.details.allergies),
+                        ).props("outlined").classes("w-full")
+
+            # --- Nächster Termin (nur im Bearbeiten-Modus) ---
+            with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
+                ui.label("Nächster Termin").classes("text-base font-semibold mb-2")
+                termindatum = ui.input(
+                    "Datum/Uhrzeit",
+                    value=edit_patient.details.next_appointment_at,
+                ).props("outlined type=datetime-local").classes("w-full")
+                terminart = ui.input(
+                    "Art",
+                    value=edit_patient.details.next_appointment_type,
+                ).props("outlined").classes("w-full")
+                terminnotiz = ui.input(
+                    "Hinweis",
+                    value=edit_patient.details.next_appointment_note,
+                ).props("outlined").classes("w-full")
         else:
-            geschlecht = None  # type: ignore[assignment]
-            groesse = None
-            sprache = None
-            wohnort = None
-            versicherung = None
+            dauerdiagnosen = None
+            medikation = None
+            risikofaktoren = None
+            allergien = None
+            termindatum = None
+            terminart = None
+            terminnotiz = None
 
+        # --- Notizen ---
         notizen = ui.textarea("Notizen").props("outlined").classes("w-full")
-
         if edit_patient:
-            vorname.value = edit_patient.first_name
-            nachname.value = edit_patient.last_name
-            geburtsdatum.value = edit_patient.date_of_birth
-            telefon.value = edit_patient.details.phone
             notizen.value = edit_patient.details.notes
 
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
@@ -1597,6 +1653,14 @@ def _open_new_patient_dialog(
                 pid = edit_patient.patient_id if edit_patient else _generate_patient_id()
 
                 orig_details = edit_patient.details if edit_patient else PatientDetails()
+
+                def _lines(field) -> tuple[str, ...]:
+                    if field is None:
+                        return ()
+                    return tuple(
+                        line.strip() for line in field.value.split("\n") if line.strip()
+                    )
+
                 details = PatientDetails(
                     phone=telefon.value or orig_details.phone,
                     notes=notizen.value or orig_details.notes,
@@ -1605,13 +1669,13 @@ def _open_new_patient_dialog(
                     contact_city=wohnort.value if wohnort is not None else orig_details.contact_city,
                     insurance=versicherung.value if versicherung is not None else orig_details.insurance,
                     groesse_cm=int(groesse.value) if groesse is not None and groesse.value.strip() else orig_details.groesse_cm,
-                    next_appointment_at=orig_details.next_appointment_at,
-                    next_appointment_type=orig_details.next_appointment_type,
-                    next_appointment_note=orig_details.next_appointment_note,
-                    allergies=orig_details.allergies,
-                    long_term_diagnoses=orig_details.long_term_diagnoses,
+                    next_appointment_at=termindatum.value if termindatum is not None else orig_details.next_appointment_at,
+                    next_appointment_type=terminart.value if terminart is not None else orig_details.next_appointment_type,
+                    next_appointment_note=terminnotiz.value if terminnotiz is not None else orig_details.next_appointment_note,
+                    allergies=_lines(allergien) or orig_details.allergies,
+                    long_term_diagnoses=_lines(dauerdiagnosen) or orig_details.long_term_diagnoses,
                     acute_diagnoses=orig_details.acute_diagnoses,
-                    risk_factors=orig_details.risk_factors,
+                    risk_factors=_lines(risikofaktoren) or orig_details.risk_factors,
                     medication_details=orig_details.medication_details,
                     patient_notes=orig_details.patient_notes,
                     open_tasks=orig_details.open_tasks,
@@ -1620,14 +1684,18 @@ def _open_new_patient_dialog(
                 orig_first = edit_patient.first_name if edit_patient else vorname.value or ""
                 orig_last = edit_patient.last_name if edit_patient else nachname.value or ""
                 orig_dob = edit_patient.date_of_birth if edit_patient else geburtsdatum.value or ""
-                orig_meds = edit_patient.medications if edit_patient else []
                 orig_conds = edit_patient.conditions if edit_patient else ""
+                med_list = (
+                    [m.strip() for m in medikation.value.split("\n") if m.strip()]
+                    if medikation is not None
+                    else (edit_patient.medications if edit_patient else [])
+                )
                 patient = PatientRecord(
                     patient_id=pid,
                     first_name=vorname.value or orig_first,
                     last_name=nachname.value or orig_last,
                     date_of_birth=geburtsdatum.value or orig_dob,
-                    medications=orig_meds,
+                    medications=med_list,
                     conditions=orig_conds,
                     details=details,
                 )

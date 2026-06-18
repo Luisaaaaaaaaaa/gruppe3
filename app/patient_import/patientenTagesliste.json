@@ -646,35 +646,57 @@
         "vorname": "Neuer",
         "nachname": "Patient",
         "geburtsdatum": "2000-11-11",
-        "geschlecht": "",
-        "sprache": ""
+        "geschlecht": "männlich",
+        "sprache": "Deutsch"
       },
       "kontakt": {
         "adresse": {
-          "ort": ""
+          "ort": "Mannheim"
         },
         "telefon": ""
       },
       "versicherung": {
         "krankenkasse": {
-          "name": ""
+          "name": "AOK"
         }
       },
       "administrativ": {
         "patientenhinweise": []
       },
       "medizinische_uebersicht": {
-        "allergien": [],
+        "allergien": [
+          {
+            "substanz": "Info: Allergien",
+            "schweregrad": "",
+            "gesichert": true
+          }
+        ],
         "risikofaktoren": {},
-        "dauerdiagnosen": [],
+        "dauerdiagnosen": [
+          {
+            "icd10": "",
+            "bezeichnung": "Info: Dauerdiagnose"
+          }
+        ],
         "akutdiagnosen": [],
         "medikation": {
-          "dauermedikation": [],
+          "dauermedikation": [
+            {
+              "wirkstoff": "Info: Medikation",
+              "praeparat": "Info: Medikation",
+              "dosierung": "",
+              "hinweis": ""
+            }
+          ],
           "bedarfsmedikation": []
         }
       },
       "termine": {
-        "naechster_termin": null,
+        "naechster_termin": {
+          "datum_uhrzeit": "2026-06-30T12:00",
+          "art": "Info: Kontrolle",
+          "hinweis": ""
+        },
         "offene_aufgaben": []
       }
     }
