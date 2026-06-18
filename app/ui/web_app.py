@@ -1070,14 +1070,7 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
             )
 
         def cancel_yes_no() -> None:
-            if session.pending_input is None:
-                return
-            session.messages.append(
-                ChatEntry(role="user", text="abbrechen", tone="user")
-            )
-            callback = session.pending_input
-            session.pending_input = None
-            callback("abbrechen")
+            session.show_cancel_dialog = True
             refresh_ui()
 
         with ui.row().classes("w-full justify-center mt-2"):
@@ -1107,10 +1100,8 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
         refresh_ui()
 
     def cancel_dialogue() -> None:
-        if session.pending_input is None:
-            return
-        answer_input.value = "abbrechen"
-        submit_answer()
+        session.show_cancel_dialog = True
+        refresh_ui()
 
     answer_input = ui.input("Ihre Antwort").props("outlined").classes("w-full")
     answer_input.on("keydown.enter", lambda _: submit_answer())
@@ -2085,12 +2076,7 @@ def _render_cancel_overlay(
                 )
 
 
-def _confirm_cancel_anamnesis(
-    session: BrowserSession, refresh_ui: Callable[[], None]
-) -> None:
-    if session.primary_controller is None:
-        return
-    session.show_cancel_dialog = False
+def _do_reset_session(session: BrowserSession) -> None:
     session.controller = None
     session.controllers.clear()
     session.selected_scenarios.clear()
@@ -2100,6 +2086,41 @@ def _confirm_cancel_anamnesis(
     session.chat_phase_done = False
     session.prefilled_answers.clear()
     session.stage = "staff_selection" if session.is_personal_mode else "scenario"
+
+
+def _confirm_cancel_anamnesis(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.primary_controller is None:
+        return
+    session.show_cancel_dialog = False
+
+    # Sprache sofort stoppen
+    ui.run_javascript(
+        "if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); } "
+        "document.body.classList.remove('avatar-is-speaking');"
+    )
+
+    if session.anamnesis_mode == "guided":
+        abschluss = "Die Anamnese wurde abgebrochen."
+        escaped = (
+            abschluss.replace("\\", "\\\\")
+            .replace("`", "\\`")
+            .replace("${", "\\${")
+        )
+        ui.run_javascript(
+            f"""
+            const u = new SpeechSynthesisUtterance(`{escaped}`);
+            u.lang = 'de-DE';
+            u.rate = 0.95;
+            window.speechSynthesis.speak(u);
+            """
+        )
+        _do_reset_session(session)
+        ui.timer(2.8, lambda: refresh_ui(), once=True)
+        return
+
+    _do_reset_session(session)
     refresh_ui()
 
 
