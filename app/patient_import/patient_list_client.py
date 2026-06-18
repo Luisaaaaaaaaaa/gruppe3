@@ -204,65 +204,159 @@ class PatientListClient:
 
 
     def append_patient(self, patient: PatientRecord) -> None:
-        patients = self.load_patients()
-        for i, p in enumerate(patients):
-            if p.patient_id == patient.patient_id:
-                patients[i] = patient
+        raw_entries = json.loads(self._json_path.read_text(encoding="utf-8"))
+        found = False
+        for i, entry in enumerate(raw_entries):
+            if entry.get("patient", {}).get("patient_id") == patient.patient_id:
+                raw_entries[i] = self._record_to_entry(patient)
+                found = True
                 break
-        else:
-            patients.append(patient)
-        self._save_patients(patients)
-
-    def _save_patients(self, patients: list[PatientRecord]) -> None:
-        entries = []
-        for rec in patients:
-            entry = self._record_to_entry(rec)
-            entries.append(entry)
+        if not found:
+            raw_entries.append(self._record_to_entry(patient))
         self._json_path.write_text(
-            json.dumps(entries, ensure_ascii=False, indent=2),
+            json.dumps(raw_entries, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
     @staticmethod
     def _record_to_entry(rec: PatientRecord) -> dict:
+        details = rec.details
+
+        def _str_list(items: tuple[str, ...]) -> list[str]:
+            return list(items)
+
         return {
             "schema_version": "1.0",
             "source_system": {"name": "SET-Anamnese", "version": "1.0"},
             "patient": {
                 "patient_id": rec.patient_id,
-                "status": rec.details.status or "aktiv",
+                "status": details.status or "aktiv",
                 "stammdaten": {
                     "vorname": rec.first_name,
                     "nachname": rec.last_name,
                     "geburtsdatum": rec.date_of_birth,
-                    "geschlecht": rec.details.gender,
-                    "sprache": rec.details.language,
+                    "geschlecht": details.gender,
+                    "sprache": details.language,
                 },
                 "kontakt": {
-                    "adresse": {
-                        "ort": rec.details.contact_city,
-                    },
-                    "telefon": rec.details.phone,
+                    "adresse": {"ort": details.contact_city},
+                    "telefon": details.phone,
                 },
                 "versicherung": {
-                    "krankenkasse": {"name": rec.details.insurance},
+                    "krankenkasse": {"name": details.insurance},
                 },
                 "administrativ": {
-                    "patientenhinweise": [rec.details.notes] if rec.details.notes else [],
+                    "patientenhinweise": (
+                        [details.notes] if details.notes else _str_list(details.patient_notes)
+                    ),
                 },
                 "medizinische_uebersicht": {
-                    "allergien": [],
-                    "risikofaktoren": {},
-                    "dauerdiagnosen": [],
-                    "akutdiagnosen": [],
-                    "medikation": {"dauermedikation": [], "bedarfsmedikation": []},
+                    "allergien": [
+                        _parse_allergy(a) for a in details.allergies
+                    ],
+                    "risikofaktoren": _parse_risk_factors(details.risk_factors),
+                    "dauerdiagnosen": [
+                        _parse_diagnosis(d) for d in details.long_term_diagnoses
+                    ],
+                    "akutdiagnosen": [
+                        _parse_diagnosis(d) for d in details.acute_diagnoses
+                    ],
+                    "medikation": _parse_medication(
+                        details.medication_details, rec.medications
+                    ),
                 },
                 "termine": {
-                    "naechster_termin": None,
-                    "offene_aufgaben": [],
+                    "naechster_termin": (
+                        {
+                            "datum_uhrzeit": details.next_appointment_at,
+                            "art": details.next_appointment_type,
+                            "hinweis": details.next_appointment_note,
+                        }
+                        if details.next_appointment_at
+                        else None
+                    ),
+                    "offene_aufgaben": [
+                        _parse_task(t) for t in details.open_tasks
+                    ],
                 },
             },
         }
+
+
+def _parse_allergy(raw: str) -> dict:
+    if " (" in raw and raw.endswith(")"):
+        substance, rest = raw.rsplit(" (", 1)
+        severity = rest.rstrip(")")
+        return {"substanz": substance, "schweregrad": severity, "gesichert": True}
+    return {"substanz": raw, "schweregrad": "", "gesichert": True}
+
+
+def _parse_diagnosis(raw: str) -> dict:
+    if " (" in raw and raw.endswith(")"):
+        label, rest = raw.rsplit(" (", 1)
+        icd10 = rest.rstrip(")")
+        return {"icd10": icd10, "bezeichnung": label}
+    return {"icd10": "", "bezeichnung": raw}
+
+
+def _parse_risk_factors(items: tuple[str, ...]) -> dict:
+    result: dict = {}
+    for item in items:
+        if item.startswith("BMI "):
+            try:
+                result["bmi"] = float(item.split(" ", 1)[1])
+            except ValueError:
+                pass
+        elif item.startswith("Rauchen: "):
+            result["rauchen"] = item.split(" ", 1)[1]
+        elif item.startswith("Alkohol: "):
+            result["alkohol"] = item.split(" ", 1)[1]
+        elif item.startswith("Familienanamnese: "):
+            familia = result.setdefault("familienanamnese", [])
+            familia.append(item.split(" ", 1)[1])
+    return result
+
+
+def _parse_medication(
+    details: tuple[str, ...], brand_names: list[str]
+) -> dict:
+    dauer = []
+    bedarf = []
+    brands_iter = iter(brand_names)
+    for entry in details:
+        section = "Bedarf" if entry.startswith("Bedarf: ") else "Dauer"
+        label = entry
+        dosage = ""
+        if " - " in entry:
+            prefix, dosage = entry.rsplit(" - ", 1)
+            label = prefix
+        substanz = label.split(": ", 1)[1] if ": " in label else label
+        med_entry = {
+            "wirkstoff": substanz,
+            "praeparat": next(brands_iter, substanz),
+            "dosierung": dosage,
+            "hinweis": "",
+        }
+        if section == "Bedarf":
+            bedarf.append(med_entry)
+        else:
+            dauer.append(med_entry)
+    return {
+        "dauermedikation": dauer,
+        "bedarfsmedikation": bedarf,
+    }
+
+
+def _parse_task(raw: str) -> dict:
+    result: dict = {}
+    parts = raw.split(" - ")
+    result["aufgabe"] = parts[0]
+    for p in parts[1:]:
+        if p.startswith("faellig "):
+            result["faellig_am"] = p.replace("faellig ", "")
+        elif p.startswith("Prioritaet "):
+            result["prioritaet"] = p.replace("Prioritaet ", "")
+    return result
 
 
 def _extract_brand_name(praeparat: str) -> str:
