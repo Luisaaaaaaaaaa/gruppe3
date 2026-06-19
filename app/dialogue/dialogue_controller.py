@@ -58,6 +58,27 @@ def _calculate_age(dob_str: str) -> int:
         return 38
 
 
+def _risikofaktor_frage(rf: str) -> str | None:
+    rf_lower = rf.lower()
+    name = rf.split(":", 1)[0].strip().lower()
+    wert = rf.split(":", 1)[1].strip() if ":" in rf else ""
+
+    if name.startswith("rauchen"):
+        if wert.lower() in ("ja", "aktiv"):
+            return "Rauchen Sie weiterhin?"
+        return "Rauchen Sie?"
+
+    if name.startswith("alkohol"):
+        if wert.lower() in ("ja", "aktiv"):
+            return "Trinken Sie weiterhin regelmäßig Alkohol?"
+        return "Trinken Sie regelmäßig Alkohol?"
+
+    if name.startswith("bmi"):
+        return None
+
+    return f"Besteht {rf} weiterhin?"
+
+
 class DialogueController:
     def __init__(
         self,
@@ -102,11 +123,23 @@ class DialogueController:
     @property
     def _medication_questions(self) -> list[AnamnesisQuestion]:
         questions: list[AnamnesisQuestion] = []
+
+        detail_map: dict[str, str] = {}
+        for med_name in self._patient.medications:
+            name_lower = med_name.lower()
+            for detail in self._patient.details.medication_details:
+                if name_lower in detail.lower():
+                    detail_map[med_name] = detail
+                    break
+            else:
+                detail_map[med_name] = med_name
+
         for idx, med_name in enumerate(self._patient.medications):
+            med_text = detail_map[med_name]
             questions.append(
                 AnamnesisQuestion(
                     key=f"{MED_PREFIX}{idx}",
-                    text=f"Nehmen Sie {med_name} regelmäßig/wie verschrieben ein?",
+                    text=f"Nehmen Sie {med_text} regelmäßig/wie verschrieben ein?",
                     input_type="ja_nein",
                 )
             )
@@ -166,17 +199,43 @@ class DialogueController:
         return phase_labels[self.state]
 
     def _load_questions(self) -> list[AnamnesisQuestion]:
+        scenario_map: dict[str, list[AnamnesisQuestion]] = {
+            "cough": list(COUGH_QUESTIONS),
+            "hypertension": list(HYPERTENSION_QUESTIONS),
+            "chest_pain": list(CHEST_PAIN_QUESTIONS),
+            "diabetes": list(DIABETES_QUESTIONS),
+        }
+        scenario_qs = scenario_map.get(self._scenario_id, [])
+
+        # Keys aus Szenario-Definitionen, die durch Akten-Daten ersetzt werden
+        akten_keys = frozenset({
+            "vorerkrankungen", "risikofaktoren",
+            "kardiovaskulaere_risikofaktoren", "bekannte_diagnosen",
+        })
+        hat_akten_daten = bool(
+            self._patient.details.long_term_diagnoses
+            or self._patient.details.risk_factors
+            or (self._patient.conditions or "").strip()
+        )
+
         questions: list[AnamnesisQuestion] = []
-        if self._conditions_question:
-            questions.append(self._conditions_question)
-        if self._scenario_id == "cough":
-            questions.extend(COUGH_QUESTIONS)
-        elif self._scenario_id == "hypertension":
-            questions.extend(HYPERTENSION_QUESTIONS)
-        elif self._scenario_id == "chest_pain":
-            questions.extend(CHEST_PAIN_QUESTIONS)
-        elif self._scenario_id == "diabetes":
-            questions.extend(DIABETES_QUESTIONS)
+
+        # 1. Erste Frage des Szenarios
+        if scenario_qs:
+            questions.append(scenario_qs[0])
+
+        # 2. Vorerkrankungen & Risikofaktoren aus der Akte (Position 2)
+        if hat_akten_daten:
+            questions.extend(self._conditions_questions)
+
+        # 3. Restliche Szenario-Fragen (überspringe alte vorerkrankungen/risikofaktoren,
+        #    wenn Akten-Daten vorhanden sind)
+        for q in scenario_qs[1:]:
+            if hat_akten_daten and q.key in akten_keys:
+                continue
+            questions.append(q)
+
+        # 4. Medikamenten-Fragen
         if self._patient.medications:
             questions.extend(self._medication_questions)
         else:
@@ -190,21 +249,66 @@ class DialogueController:
         return questions
 
     @property
-    def _conditions_question(self) -> AnamnesisQuestion | None:
-        if not self._patient.conditions:
-            return None
-        return AnamnesisQuestion(
-            key="vorerkrankungen_aktuell",
-            text=(
-                f"In Ihrer Akte sind folgende Vorerkrankungen und Risikofaktoren "
-                f"vermerkt: {self._patient.conditions}. Hat sich daran etwas "
-                f"verändert? Sind Erkrankungen hinzugekommen oder wurden "
-                f"Beschwerden in letzter Zeit schlimmer oder besser? "
-                f"Bitte beschreiben Sie."
-            ),
-            input_type="freitext",
-            required=False,
-        )
+    def _conditions_questions(self) -> list[AnamnesisQuestion]:
+        questions: list[AnamnesisQuestion] = []
+        diagnoses = self._patient.details.long_term_diagnoses
+        risk_factors = self._patient.details.risk_factors
+        conditions_str = (self._patient.conditions or "").strip()
+
+        if not diagnoses and not risk_factors:
+            if conditions_str:
+                questions.append(
+                    AnamnesisQuestion(
+                        key="vorerkrankungen_aktuell",
+                        text=(
+                            f"In Ihrer Akte sind folgende Vorerkrankungen und Risikofaktoren "
+                            f"vermerkt: {conditions_str}. Hat sich daran etwas "
+                            f"verändert? Sind Erkrankungen hinzugekommen oder wurden "
+                            f"Beschwerden in letzter Zeit schlimmer oder besser? "
+                            f"Bitte beschreiben Sie."
+                        ),
+                        input_type="freitext",
+                        required=False,
+                    )
+                )
+            return questions
+
+        if diagnoses:
+            diagnose_liste = "\n".join(f"  • {d}" for d in diagnoses)
+            questions.append(
+                AnamnesisQuestion(
+                    key="vorerkrankungen_liste",
+                    text=(
+                        f"In Ihrer Akte sind folgende Vorerkrankungen vermerkt:\n"
+                        f"{diagnose_liste}\n\n"
+                        f"Hat sich an Ihren Vorerkrankungen etwas verändert? "
+                        f"Sind Erkrankungen hinzugekommen oder wurden "
+                        f"Beschwerden in letzter Zeit schlimmer oder besser? "
+                        f"Bitte beschreiben Sie."
+                    ),
+                    input_type="freitext",
+                    required=False,
+                )
+            )
+
+        for idx, rf in enumerate(risk_factors):
+            if rf.lower().startswith("familien"):
+                continue
+
+            text = _risikofaktor_frage(rf)
+            if text is None:
+                continue
+
+            questions.append(
+                AnamnesisQuestion(
+                    key=f"risikofaktor_{idx}",
+                    text=text,
+                    input_type="ja_nein",
+                    required=True,
+                )
+            )
+
+        return questions
 
     def start(self) -> None:
         log_info(f"Dialogue gestartet: Szenario={self._scenario_key}, Patient={self._patient.patient_id}")
