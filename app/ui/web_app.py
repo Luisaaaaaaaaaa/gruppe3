@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -2139,7 +2138,7 @@ def _simulate_pulse(fields: dict[str, object]) -> None:
     puls_field = fields.get("puls")
     if not isinstance(puls_field, _SliderField):
         return
-    simulated = random.randint(60, 100)
+    simulated = Simulator.simuliere_puls()
     puls_field.slider.value = simulated
     puls_field.value_label.set_text(f"Wert: {simulated}")
     puls_field.unknown_checkbox.value = False
@@ -2150,12 +2149,11 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> None:
     bp_field = fields.get("blutdruck_systolisch")
     if not isinstance(bp_field, _BloodPressureField):
         return
-    sys = random.randint(110, 160)
-    dia = random.randint(60, 100)
-    bp_field.sys_slider.value = sys
-    bp_field.sys_label.set_text(f"Systolisch: {sys}")
-    bp_field.dia_slider.value = dia
-    bp_field.dia_label.set_text(f"Diastolisch: {dia}")
+    bp = Simulator.simuliere_blutdruck()
+    bp_field.sys_slider.value = bp["systolisch"]
+    bp_field.sys_label.set_text(f"Systolisch: {bp['systolisch']}")
+    bp_field.dia_slider.value = bp["diastolisch"]
+    bp_field.dia_label.set_text(f"Diastolisch: {bp['diastolisch']}")
     bp_field.unknown_checkbox.value = False
     bp_field.sys_slider.enable()
     bp_field.dia_slider.enable()

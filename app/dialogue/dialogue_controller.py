@@ -349,23 +349,42 @@ class DialogueController:
 
     def _measure_vitals(self) -> None:
         log_state_change("ANAMNESIS", "VITAL_PARAMETERS")
-        self._display(
-            "\nVitalparameter werden nun erfasst. "
-            "Der Blutdruck wird über den Gerätesimulator gemessen..."
+
+        sys_str = (self._answers.get("blutdruck_systolisch") or "").strip()
+        dia_str = (self._answers.get("blutdruck_diastolisch") or "").strip()
+        puls_str = (self._answers.get("puls") or "").strip()
+
+        bp_known = (
+            sys_str.lower() not in ("", "unbekannt")
+            and dia_str.lower() not in ("", "unbekannt")
         )
 
-        simulator = Simulator(geschlecht="weiblich", groesse_cm=167, alter=38)
-        bp = simulator.blutdruck()
-        self._vitals = {
-            "systolisch": bp["systolisch"],
-            "diastolisch": bp["diastolisch"],
-        }
+        if bp_known:
+            self._vitals = {
+                "systolisch": float(sys_str.replace(",", ".")),
+                "diastolisch": float(dia_str.replace(",", ".")),
+            }
+            self._display(
+                f"Blutdruck aus Anamnese übernommen: "
+                f"{self._vitals['systolisch']}/{self._vitals['diastolisch']} mmHg"
+            )
+        else:
+            simulator = Simulator(geschlecht="weiblich", groesse_cm=167, alter=38)
+            bp = simulator.blutdruck()
+            self._vitals = {
+                "systolisch": bp["systolisch"],
+                "diastolisch": bp["diastolisch"],
+            }
+            log_info(
+                f"Vitalparameter simuliert: {bp['systolisch']}/{bp['diastolisch']} mmHg"
+            )
+            self._display(
+                f"Simulierter Blutdruck: {bp['systolisch']}/{bp['diastolisch']} mmHg "
+                f"[Quelle: Gerätesimulator]"
+            )
 
-        log_info(f"Vitalparameter gemessen: {bp['systolisch']}/{bp['diastolisch']} mmHg (simuliert)")
-        self._display(
-            f"Simulierter Blutdruck: {bp['systolisch']}/{bp['diastolisch']} mmHg "
-            f"[Quelle: Gerätesimulator]"
-        )
+        if puls_str.lower() not in ("", "unbekannt"):
+            self._vitals["puls"] = float(puls_str.replace(",", "."))
 
         self._state_machine.advance()
         self._handle_state()

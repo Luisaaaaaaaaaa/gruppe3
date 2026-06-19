@@ -182,6 +182,19 @@ class Simulator:
             "diastolisch": diastolisch
         }
 
+    @staticmethod
+    def simuliere_puls() -> int:
+        """Realistischer Ruhepuls 60-100 bpm"""
+        return random.randint(60, 100)
+
+    @staticmethod
+    def simuliere_blutdruck() -> dict[str, int]:
+        """Realistischer Blutdruck: systolisch 110-160, diastolisch 60-100"""
+        return {
+            "systolisch": random.randint(110, 160),
+            "diastolisch": random.randint(60, 100),
+        }
+
 
 # Beispiel
 if __name__ == "__main__":
