@@ -33,12 +33,24 @@ QUESTIONS: list[AnamnesisQuestion] = [
         slider_step=1,
     ),
     AnamnesisQuestion(
+        key="blutdruck_messen",
+        text="Bitte messen Sie Ihren Blutdruck.",
+        required=False,
+        input_type="freitext",
+    ),
+    AnamnesisQuestion(
         key="puls",
         text="Kennen Sie Ihren aktuellen Puls (Schläge pro Minute)? Falls unbekannt, 'unbekannt' eingeben.",
         input_type="zahl",
         slider_min=50,
         slider_max=250,
         slider_step=1,
+    ),
+    AnamnesisQuestion(
+        key="puls_messen",
+        text="Bitte messen Sie Ihren Puls.",
+        required=False,
+        input_type="freitext",
     ),
     AnamnesisQuestion(
         key="messbedingungen",

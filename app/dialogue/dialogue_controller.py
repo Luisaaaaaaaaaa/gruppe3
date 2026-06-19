@@ -284,6 +284,15 @@ class DialogueController:
         if self._scenario_id == "diabetes":
             return should_ask_follow_up(question_key, answers)
 
+        if self._scenario_id == "hypertension":
+            if question_key == "puls_messen":
+                antwort = (answers.get("puls") or "").strip().lower()
+                return antwort == "unbekannt"
+            if question_key == "blutdruck_messen":
+                antwort = (answers.get("blutdruck_systolisch") or "").strip().lower()
+                return antwort == "unbekannt"
+            return True
+
         return True
 
     def _should_ask_question(self, question: AnamnesisQuestion) -> bool:

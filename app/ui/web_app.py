@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -628,6 +629,7 @@ class BrowserSession:
 class _SliderField:
     slider: ui.slider
     unknown_checkbox: ui.checkbox
+    value_label: ui.label
     min_val: float
     max_val: float
     step: float
@@ -637,6 +639,38 @@ class _SliderField:
         if self.unknown_checkbox.value:
             return "unbekannt"
         return str(int(self.slider.value))
+
+
+@dataclass
+class _DummyField:
+    value: str = ""
+
+
+@dataclass
+class _BloodPressureField:
+    sys_slider: ui.slider
+    sys_label: ui.label
+    dia_slider: ui.slider
+    dia_label: ui.label
+    unknown_checkbox: ui.checkbox
+
+    @property
+    def value(self) -> str:
+        if self.unknown_checkbox.value:
+            return "unbekannt"
+        return f"{int(self.sys_slider.value)}/{int(self.dia_slider.value)}"
+
+    @property
+    def sys_value(self) -> str:
+        if self.unknown_checkbox.value:
+            return "unbekannt"
+        return str(int(self.sys_slider.value))
+
+    @property
+    def dia_value(self) -> str:
+        if self.unknown_checkbox.value:
+            return "unbekannt"
+        return str(int(self.dia_slider.value))
 
 
 def _classify_message(text: str) -> str:
@@ -2101,6 +2135,32 @@ def _start_editing(
     refresh_ui()
 
 
+def _simulate_pulse(fields: dict[str, object]) -> None:
+    puls_field = fields.get("puls")
+    if not isinstance(puls_field, _SliderField):
+        return
+    simulated = random.randint(60, 100)
+    puls_field.slider.value = simulated
+    puls_field.value_label.set_text(f"Wert: {simulated}")
+    puls_field.unknown_checkbox.value = False
+    puls_field.slider.enable()
+
+
+def _simulate_blood_pressure(fields: dict[str, object]) -> None:
+    bp_field = fields.get("blutdruck_systolisch")
+    if not isinstance(bp_field, _BloodPressureField):
+        return
+    sys = random.randint(110, 160)
+    dia = random.randint(60, 100)
+    bp_field.sys_slider.value = sys
+    bp_field.sys_label.set_text(f"Systolisch: {sys}")
+    bp_field.dia_slider.value = dia
+    bp_field.dia_label.set_text(f"Diastolisch: {dia}")
+    bp_field.unknown_checkbox.value = False
+    bp_field.sys_slider.enable()
+    bp_field.dia_slider.enable()
+
+
 def _build_question_form(
     controller: DialogueController,
     questions_with_answers: list[tuple],
@@ -2121,14 +2181,18 @@ def _build_question_form(
     input_types: dict[str, str] = {q.key: q.input_type for q, _ in questions_with_answers}
     required_keys: set[str] = {q.key for q, _ in questions_with_answers if q.required}
 
+    def _refresh_visibility() -> None:
+        if not live_visibility:
+            return
+        for q, _ in questions_with_answers:
+            if q.key in containers:
+                containers[q.key].visible = controller.is_question_visible(
+                    q.key, {k: (f.value if hasattr(f, 'value') else f) for k, f in fields.items()}
+                )
+
     def _make_radio_handler(key: str):
         def _handler(e) -> None:
-            if live_visibility:
-                for q, _ in questions_with_answers:
-                    if q.key in containers:
-                        containers[q.key].visible = controller.is_question_visible(
-                            q.key, {k: (f.value if hasattr(f, 'value') else f) for k, f in fields.items()}
-                        )
+            _refresh_visibility()
         return _handler
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
@@ -2151,6 +2215,96 @@ def _build_question_form(
             card_classes = "surface-card w-full shadow-none"
             if is_prefilled:
                 card_classes += " border-l-4 border-l-[#17603d]"
+
+            if key == "puls_messen":
+                with ui.card().classes(card_classes) as card:
+                    containers[key] = card
+                    with ui.column().classes("w-full gap-2"):
+                        ui.label(
+                            "Bitte messen Sie Ihren Puls."
+                        ).classes("text-[0.97rem] leading-7 text-slate-600")
+                        ui.button(
+                            "Messen (simulieren)",
+                            on_click=lambda: _simulate_pulse(fields),
+                        ).props("unelevated").classes(
+                            "bg-[#0f766e] text-white w-fit"
+                        )
+                fields[key] = _DummyField()
+                continue
+
+            if key == "blutdruck_diastolisch":
+                fields[key] = _DummyField()
+                continue
+
+            if key == "blutdruck_messen":
+                with ui.card().classes(card_classes) as card:
+                    containers[key] = card
+                    with ui.column().classes("w-full gap-2"):
+                        ui.label(
+                            "Bitte messen Sie Ihren Blutdruck."
+                        ).classes("text-[0.97rem] leading-7 text-slate-600")
+                        ui.button(
+                            "Messen (simulieren)",
+                            on_click=lambda: _simulate_blood_pressure(fields),
+                        ).props("unelevated").classes(
+                            "bg-[#0f766e] text-white w-fit"
+                        )
+                fields[key] = _DummyField()
+                continue
+
+            if key == "blutdruck_systolisch":
+                with ui.card().classes(card_classes) as card:
+                    containers[key] = card
+                    with ui.column().classes("w-full gap-3"):
+                        ui.label(
+                            "Wie hoch war Ihr letzter gemessener Blutdruck?\n"
+                            "Der obere Wert (systolisch) ist der höhere Druck beim Herzschlag,\n"
+                            "der untere Wert (diastolisch) ist der niedrigere Druck in der Ruhephase des Herzens."
+                        ).classes(
+                            "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
+                        )
+                        with ui.column().classes("w-full gap-1"):
+                            sys_slider = ui.slider(
+                                min=80, max=250, step=1, value=120
+                            ).classes("w-full")
+                            sys_label = ui.label("Systolisch (oberer Wert): 120").classes(
+                                "text-sm font-medium"
+                            )
+                            sys_slider.on(
+                                "update:model-value",
+                                lambda e, lbl=sys_label: lbl.set_text(
+                                    f"Systolisch (oberer Wert): {int(float(e.args))}"
+                                ),
+                            )
+                        with ui.column().classes("w-full gap-1"):
+                            dia_slider = ui.slider(
+                                min=40, max=150, step=1, value=80
+                            ).classes("w-full")
+                            dia_label = ui.label("Diastolisch (unterer Wert): 80").classes(
+                                "text-sm font-medium"
+                            )
+                            dia_slider.on(
+                                "update:model-value",
+                                lambda e, lbl=dia_label: lbl.set_text(
+                                    f"Diastolisch (unterer Wert): {int(float(e.args))}"
+                                ),
+                            )
+                        unknown_checkbox = ui.checkbox("unbekannt")
+                        unknown_checkbox.on(
+                            "update:model-value",
+                            lambda e: (
+                                sys_slider.disable() if e.args else sys_slider.enable(),
+                                dia_slider.disable() if e.args else dia_slider.enable(),
+                            ),
+                        )
+                        unknown_checkbox.on(
+                            "update:model-value",
+                            lambda _: _refresh_visibility(),
+                        )
+                fields[key] = _BloodPressureField(
+                    sys_slider, sys_label, dia_slider, dia_label, unknown_checkbox
+                )
+                continue
 
             with ui.card().classes(card_classes) as card:
                 containers[key] = card
@@ -2215,9 +2369,13 @@ def _build_question_form(
                                     s.disable() if e.args else s.enable()
                                 ),
                             )
+                            unknown_checkbox.on(
+                                "update:model-value",
+                                lambda _: _refresh_visibility(),
+                            )
 
                         fields[key] = _SliderField(
-                            slider, unknown_checkbox, min_val, max_val, step
+                            slider, unknown_checkbox, value_label, min_val, max_val, step
                         )
                     else:
                         inp = ui.input(
@@ -2243,16 +2401,25 @@ def _build_question_form(
                         q.key, collected_now
                     )
 
+        def _collect_values() -> dict[str, str]:
+            result: dict[str, str] = {}
+            for key, field in fields.items():
+                if isinstance(field, _BloodPressureField):
+                    result["blutdruck_systolisch"] = field.sys_value
+                    result["blutdruck_diastolisch"] = field.dia_value
+                elif isinstance(field, _DummyField):
+                    continue
+                else:
+                    value = field.value
+                    if value is None:
+                        value = ""
+                    result[key] = str(value).strip()
+            return result
+
         def _collect_and_validate() -> list[str]:
-            collected: dict[str, str] = {}
             errors: list[str] = []
 
-            for key, field in fields.items():
-                value = field.value
-                if value is None:
-                    value = ""
-                collected[key] = str(value).strip()
-
+            collected = _collect_values()
             for key in required_keys:
                 if not collected.get(key, "") and controller.is_question_visible(key, collected):
                     errors.append(f"'{q_text_map[key]}' ist erforderlich und wurde nicht ausgefüllt.")
@@ -2282,10 +2449,7 @@ def _build_question_form(
                     multi_line=True,
                 )
                 return
-            collected = {
-                k: (str(f.value).strip() if f.value is not None else "")
-                for k, f in fields.items()
-            }
+            collected = _collect_values()
             submit_callback(collected)
 
         with ui.row().classes("w-full justify-end gap-3"):
