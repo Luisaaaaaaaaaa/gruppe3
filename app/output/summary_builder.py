@@ -39,10 +39,18 @@ def build_summary(
 
     escalation_required = any(rf.severity == "critical" for rf in red_flags)
 
+    _ignored_keys = frozenset({
+        "blutdruck_messen",
+        "blutdruck_diastolisch",
+        "puls_messen",
+        "gewicht_messen",
+    })
+
     open_points = [
         f"Angabe zu '{key}' fehlt oder unbekannt."
         for key, value in answers.items()
-        if not value.strip() or value.strip().lower() == "unbekannt"
+        if key not in _ignored_keys
+        and (not value.strip() or value.strip().lower() == "unbekannt")
     ]
 
     grouped_sections = build_grouped_sections(scenario, answers, vitals)

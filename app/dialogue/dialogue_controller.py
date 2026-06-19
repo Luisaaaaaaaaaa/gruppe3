@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from typing import Callable
 
@@ -46,6 +47,15 @@ SCENARIO_MAP: dict[str, str] = {
     "C": "hypertension",
     "D": "diabetes",
 }
+
+
+def _calculate_age(dob_str: str) -> int:
+    try:
+        born = date.fromisoformat(dob_str)
+        today = date.today()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    except (ValueError, TypeError):
+        return 38
 
 
 class DialogueController:
@@ -291,9 +301,15 @@ class DialogueController:
             if question_key == "blutdruck_messen":
                 antwort = (answers.get("blutdruck_systolisch") or "").strip().lower()
                 return antwort == "unbekannt"
+            if question_key == "gewicht_messen":
+                antwort = (answers.get("gewicht") or "").strip().lower()
+                return antwort == "unbekannt"
             return True
 
         return True
+
+    def get_patient(self) -> PatientRecord:
+        return self._patient
 
     def _should_ask_question(self, question: AnamnesisQuestion) -> bool:
         return self.is_question_visible(question.key)
@@ -385,6 +401,26 @@ class DialogueController:
 
         if puls_str.lower() not in ("", "unbekannt"):
             self._vitals["puls"] = float(puls_str.replace(",", "."))
+
+        gewicht_str = (self._answers.get("gewicht") or "").strip()
+        if gewicht_str.lower() not in ("", "unbekannt"):
+            self._vitals["gewicht"] = float(gewicht_str.replace(",", "."))
+        else:
+            sim = Simulator(
+                geschlecht=self._patient.details.gender,
+                groesse_cm=self._patient.details.groesse_cm,
+                alter=_calculate_age(self._patient.date_of_birth),
+            )
+            sim_gewicht = sim.gewicht()
+            self._vitals["gewicht"] = sim_gewicht["gewicht"]
+            log_info(
+                f"Gewicht simuliert: {sim_gewicht['gewicht']} kg "
+                f"(BMI: {sim_gewicht['bmi']}, {sim_gewicht['klasse']})"
+            )
+            self._display(
+                f"Simuliertes Gewicht: {sim_gewicht['gewicht']} kg "
+                f"(BMI: {sim_gewicht['bmi']}, {sim_gewicht['klasse']})"
+            )
 
         self._state_machine.advance()
         self._handle_state()

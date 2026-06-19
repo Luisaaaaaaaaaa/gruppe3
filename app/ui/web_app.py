@@ -2093,11 +2093,26 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 },
             )
 
+            _vital_labels = {
+                "systolisch": "Systolisch",
+                "diastolisch": "Diastolisch",
+                "puls": "Puls",
+                "gewicht": "Gewicht",
+            }
+            _vital_units = {
+                "systolisch": "mmHg",
+                "diastolisch": "mmHg",
+                "puls": "bpm",
+                "gewicht": "kg",
+            }
             _render_summary_section(
                 "Vitalparameter",
                 {
                     "Quelle": summary.vitals_source,
-                    **{key: str(value) for key, value in summary.vitals.items()},
+                    **{
+                        _vital_labels.get(key, key): f"{value} {_vital_units.get(key, '')}".strip()
+                        for key, value in summary.vitals.items()
+                    },
                 },
             )
 
@@ -2157,6 +2172,26 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> None:
     bp_field.unknown_checkbox.value = False
     bp_field.sys_slider.enable()
     bp_field.dia_slider.enable()
+
+
+def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueController) -> None:
+    weight_field = fields.get("gewicht")
+    if not isinstance(weight_field, _SliderField):
+        return
+    patient = controller.get_patient()
+    sim = Simulator(
+        geschlecht=patient.details.gender,
+        groesse_cm=patient.details.groesse_cm,
+        alter=_calculate_age(patient.date_of_birth),
+    )
+    result = sim.gewicht()
+    simulated = result["gewicht"]
+    bmi = result["bmi"]
+    klasse = result["klasse"]
+    weight_field.slider.value = simulated
+    weight_field.value_label.set_text(f"Wert: {int(simulated)} kg (BMI: {bmi}, {klasse})")
+    weight_field.unknown_checkbox.value = False
+    weight_field.slider.enable()
 
 
 def _build_question_form(
@@ -2224,6 +2259,22 @@ def _build_question_form(
                         ui.button(
                             "Messen (simulieren)",
                             on_click=lambda: _simulate_pulse(fields),
+                        ).props("unelevated").classes(
+                            "bg-[#0f766e] text-white w-fit"
+                        )
+                fields[key] = _DummyField()
+                continue
+
+            if key == "gewicht_messen":
+                with ui.card().classes(card_classes) as card:
+                    containers[key] = card
+                    with ui.column().classes("w-full gap-2"):
+                        ui.label(
+                            "Bitte wiegen Sie sich."
+                        ).classes("text-[0.97rem] leading-7 text-slate-600")
+                        ui.button(
+                            "Wiegen (simulieren)",
+                            on_click=lambda c=controller: _simulate_weight_in_form(fields, c),
                         ).props("unelevated").classes(
                             "bg-[#0f766e] text-white w-fit"
                         )

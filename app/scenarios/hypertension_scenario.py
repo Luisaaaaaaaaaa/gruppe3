@@ -105,4 +105,10 @@ QUESTIONS: list[AnamnesisQuestion] = [
         slider_max=300,
         slider_step=1,
     ),
+    AnamnesisQuestion(
+        key="gewicht_messen",
+        text="Bitte wiegen Sie sich.",
+        required=False,
+        input_type="freitext",
+    ),
 ]
