@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from app.logger.audit_logger import log_info
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,21 +31,32 @@ def extract_answers(
 ) -> dict[str, str]:
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key or not patient_text.strip():
+        log_info("Keine API-Schlüssel oder kein Patiententext vorhanden, überspringe KI-Antwort-Extraktion.")
+        print("Fehlende API-Schlüssel")
         return {}
 
     try:
-        import google.generativeai as genai
+        from google import genai
     except ImportError:
+        log_info("GenAI-Bibliothek nicht installiert, überspringe KI-Antwort-Extraktion.")
         return {}
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
-    questions_desc = []
-    for q in questions:
-        entry = {"key": q.key, "text": q.text, "type": q.input_type}
-        questions_desc.append(entry)
+    questions_desc = [
+        {
+            "key": q.key,
+            "text": q.text,
+            "type": q.input_type,
+        }
+        for q in questions
+    ]
 
-    questions_json = json.dumps(questions_desc, ensure_ascii=False, indent=2)
+    questions_json = json.dumps(
+        questions_desc,
+        ensure_ascii=False,
+        indent=2,
+    )
 
     prompt = (
         "Du bist ein medizinischer Assistent in einer Hausarztpraxis. "
@@ -66,21 +78,36 @@ def extract_answers(
     )
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+        )
+        print(response)
+        print(response.text)  # Debug-Ausgabe
         raw = response.text.strip()
 
         if raw.startswith("```"):
             lines = raw.splitlines()
-            lines = [l for l in lines if not l.strip().startswith("```")]
+            lines = [
+                line
+                for line in lines
+                if not line.strip().startswith("```")
+            ]
             raw = "\n".join(lines)
-
+        print("RAW:")
+        print(raw)
         parsed = json.loads(raw)
+
         if not isinstance(parsed, dict):
             return {}
 
         valid_keys = {q.key for q in questions}
-        return {k: str(v) for k, v in parsed.items() if k in valid_keys and v}
+
+        return {
+            k: str(v)
+            for k, v in parsed.items()
+            if k in valid_keys and v
+        }
 
     except Exception:
         return {}
