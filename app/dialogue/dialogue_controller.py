@@ -408,6 +408,13 @@ class DialogueController:
         if self._scenario_id == "diabetes":
             return should_ask_follow_up(question_key, answers)
 
+        if self._scenario_id == "chest_pain":
+            if question_key == "ruhedyspnoe":
+                return (answers.get("atemnot") or "").strip().lower() in (
+                    "ja", "j", "yes", "y",
+                )
+            return True
+
         if self._scenario_id == "hypertension":
             if question_key == "puls_messen":
                 antwort = (answers.get("puls") or "").strip().lower()
@@ -458,7 +465,7 @@ class DialogueController:
         log_answer(question.key, answer.strip())
         self._current_question_index += 1
 
-        if self._escalate_critical_cough_answers():
+        if self._escalate_critical_acute_answers():
             return
 
         self._ask_next_question()
@@ -478,7 +485,7 @@ class DialogueController:
             if self.is_question_visible(q.key, self._answers)
         )
 
-        if self._escalate_critical_cough_answers():
+        if self._escalate_critical_acute_answers():
             return
 
         self._state_machine.advance()
@@ -601,8 +608,8 @@ class DialogueController:
         else:
             self._vitals_source = "nicht erhoben"
 
-    def _escalate_critical_cough_answers(self) -> bool:
-        if self._scenario_id != "cough":
+    def _escalate_critical_acute_answers(self) -> bool:
+        if self._scenario_id not in ("cough", "chest_pain"):
             return False
 
         flags = check(
@@ -617,10 +624,18 @@ class DialogueController:
         self._red_flags = flags
         for flag in flags:
             log_red_flag(flag.rule_id, flag.description, flag.severity)
-        log_escalation("Kritisches Warnzeichen während der Husten-Anamnese")
+        log_escalation(
+            f"Kritisches Warnzeichen während der {self._scenario_id}-Anamnese"
+        )
         self._state_machine.jump_to(DialogueState.ESCALATION)
         self._handle_state()
         return True
+
+    def _escalate_critical_cough_answers(self) -> bool:
+        """Kompatibilität für bestehende Aufrufer der früheren Husten-Methode."""
+        if self._scenario_id != "cough":
+            return False
+        return self._escalate_critical_acute_answers()
 
     def _check_red_flags(self) -> None:
         log_state_change("VITAL_PARAMETERS", "RED_FLAG_CHECK")
@@ -721,7 +736,11 @@ class DialogueController:
         self._handle_state()
 
     def _display_herzscore(self) -> None:
-        result = berechne_marburger_herzscore(self._answers)
+        result = berechne_marburger_herzscore(
+            self._answers,
+            alter=_calculate_age(self._patient.date_of_birth),
+            geschlecht=self._patient.details.gender,
+        )
         self._display("")
         self._display("Marburger Herzscore (nur zur Dokumentation):")
         self._display(f"  Score: {result['score']} / {result['max_score']}")

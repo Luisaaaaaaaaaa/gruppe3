@@ -91,26 +91,16 @@ class TestRedFlagEscalation:
         controller.start()
         callbacks.pop()("ja")  # consent
 
-        # Brustschmerz hat 17 Fragen + 1 medikamente-Frage (keine Medis hinterlegt): 18
+        # Kritische Antworten unterbrechen den Fragebogen sofort.
         critical_answers = [
             "Hinter dem Brustbein",  # lokalisation
             "vor 30 Minuten",        # beginn
+            "ja",                    # ploetzlicher_beginn
             "Seit 30 Minuten",       # dauer
+            "ja",                    # schmerzen_aktuell
+            "7",                     # schmerzstaerke
             "drückend",              # schmerzcharakter
-            "linker Arm",            # ausstrahlung -> RF!
-            "ja",                    # belastungsabhaengigkeit -> RF!
-            "ja",                    # ruhe_besserung
-            "ja",                    # atemnot -> RF!
-            "ja",                    # uebelkeit
-            "ja",                    # kaltschweissigkeit -> RF!
-            "nein",                  # synkope
-            "nein",                  # ausgepraege_schwaeche
-            "nein",                  # bekannte_khk
-            "nein",                  # alter_ueber_55
-            "Bluthochdruck",         # kardiovaskulaere_risikofaktoren
-            "Keine",                 # vorerkrankungen
-            "nein",                  # druckschmerz_thoraxwand
-            "ASS 100 mg",            # medikamente
+            "linker Arm",            # ausstrahlung -> sofortige Eskalation
         ]
 
         for answer in critical_answers:

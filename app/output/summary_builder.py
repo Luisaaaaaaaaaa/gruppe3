@@ -174,6 +174,89 @@ def build_grouped_sections(
 
         return sections
 
+    if scenario in ("B", "chest_pain"):
+        def add_chest_section(title: str, fields: dict[str, str]) -> None:
+            non_empty = {key: value for key, value in fields.items() if value.strip()}
+            if non_empty:
+                sections[title] = non_empty
+
+        add_chest_section("Beginn und Verlauf", {
+            "Ort der Schmerzen": answers.get("lokalisation", ""),
+            "Beginn": answers.get("beginn", ""),
+            "Plötzlicher Beginn": answers.get("ploetzlicher_beginn", ""),
+            "Dauer": answers.get("dauer", ""),
+            "Schmerzen aktuell": answers.get("schmerzen_aktuell", ""),
+            "Stärke (0 bis 10)": answers.get("schmerzstaerke", ""),
+            "Stärker oder häufiger geworden": answers.get("rasche_verschlechterung", ""),
+            "Ähnliche Schmerzen früher": answers.get("aehnliche_schmerzen", ""),
+        })
+        add_chest_section("Art und Auslöser", {
+            "Art der Schmerzen": answers.get("schmerzcharakter", ""),
+            "Ziehen in andere Körperstellen": answers.get("ausstrahlung", ""),
+            "Bei Anstrengung": answers.get("belastungsabhaengigkeit", ""),
+            "Besserung in Ruhe": answers.get("ruhe_besserung", ""),
+            "Bei Bewegung, Atmen oder Husten": answers.get("bewegung_atmung_husten", ""),
+            "Durch Druck auslösbar": answers.get("druckschmerz_thoraxwand", ""),
+            "Bei Essen oder Schlucken": answers.get("essen_schlucken", ""),
+        })
+        add_chest_section("Begleitende Beschwerden", {
+            "Sodbrennen": answers.get("sodbrennen", ""),
+            "Übelkeit oder Erbrechen": answers.get("uebelkeit", ""),
+            "Schlechter Luft": answers.get("atemnot", ""),
+            "Schlechter Luft in Ruhe": answers.get("ruhedyspnoe", ""),
+            "Kaltes oder starkes Schwitzen": answers.get("kaltschweissigkeit", ""),
+            "Ohnmacht oder Beinahe-Zusammenbruch": answers.get("synkope", ""),
+            "Verwirrtheit oder starke Benommenheit": answers.get("verwirrtheit", ""),
+            "Sehr starke Schwäche": answers.get("ausgepraege_schwaeche", ""),
+        })
+
+        risks = {
+            "Patient vermutet das Herz als Ursache": answers.get("patient_vermutet_herz", ""),
+            "Erkrankung von Herz oder Blutgefäßen": answers.get("bekannte_khk", ""),
+            "Risikofaktoren": answers.get("kardiovaskulaere_risikofaktoren", ""),
+            "Weitere Vorerkrankungen": answers.get("vorerkrankungen", ""),
+            "Änderungen laut Patientenakte": answers.get("vorerkrankungen_aktuell", ""),
+            "Vorerkrankungen laut Patientenakte": answers.get("vorerkrankungen_liste", ""),
+        }
+        for key, value in answers.items():
+            if key.startswith("risikofaktor_"):
+                risks[f"Risikofaktor {key.removeprefix('risikofaktor_')}"] = value
+        add_chest_section("Vorerkrankungen und Risiken", risks)
+
+        medications: dict[str, str] = {}
+        if answers.get("medikamente", "").strip():
+            medications["Aktuelle Medikamente"] = answers["medikamente"]
+        for key, value in answers.items():
+            if key.startswith("med_adhaerenz_grund_"):
+                index = int(key.removeprefix("med_adhaerenz_grund_"))
+                name = (
+                    patient_medications[index]
+                    if patient_medications and index < len(patient_medications)
+                    else f"Medikament {index + 1}"
+                )
+                medications[f"Grund für abweichende Einnahme von {name}"] = value
+            elif key.startswith("med_adhaerenz_"):
+                index = int(key.removeprefix("med_adhaerenz_"))
+                name = (
+                    patient_medications[index]
+                    if patient_medications and index < len(patient_medications)
+                    else f"Medikament {index + 1}"
+                )
+                medications[f"{name} wie verordnet"] = value
+        add_chest_section("Medikamente", medications)
+
+        vital_labels = {
+            "systolisch": "Oberer Blutdruckwert",
+            "diastolisch": "Unterer Blutdruckwert",
+            "puls": "Puls pro Minute",
+            "spo2": "Sauerstoffsättigung in %",
+        }
+        add_chest_section(
+            "Messwerte",
+            {vital_labels[key]: str(value) for key, value in vitals.items() if key in vital_labels},
+        )
+        return sections
+
     if scenario in ("D", "diabetes"):
         verlauf: dict[str, str] = {}
 

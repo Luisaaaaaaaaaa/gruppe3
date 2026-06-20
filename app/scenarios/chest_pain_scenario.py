@@ -1,152 +1,218 @@
-from dataclasses import dataclass
-
 from app.scenarios.hypertension_scenario import AnamnesisQuestion
 
 
 SCENARIO_KEY = "chest_pain"
 SCENARIO_TITLE = "Szenario B: Brustschmerz in der Hausarztpraxis"
 
+# Medizinische Grundlage: DEGAM-Leitlinie Brustschmerz (Kurzfassung),
+# Marburger Herzscore und Vorgaben des Semesterprojekts. Der Fragebogen
+# dokumentiert Beschwerden und Warnzeichen; er stellt keine Diagnose.
+
 QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion(
-        key="lokalisation",
-        text="Wo genau spüren Sie die Schmerzen? (z.B. hinter dem Brustbein, links, rechts, großflächig)",
-        input_type="freitext",
+        "lokalisation",
+        (
+            "WICHTIG: Haben Sie gerade starke Schmerzen, schlecht Luft, kalten Schweiß, "
+            "starke Schwäche oder waren Sie beinahe ohnmächtig? Informieren Sie bitte "
+            "sofort das Praxispersonal.\n\nWo genau spüren Sie die Schmerzen? "
+            "(z. B. Mitte der Brust, links, rechts oder an mehreren Stellen)"
+        ),
     ),
     AnamnesisQuestion(
-        key="beginn",
-        text="Wann haben die Schmerzen begonnen? (z.B. vor 2 Stunden, seit gestern)",
-        input_type="freitext",
+        "beginn",
+        "Wann haben die Schmerzen begonnen? (z. B. heute vor 2 Stunden oder seit gestern)",
     ),
     AnamnesisQuestion(
-        key="dauer",
-        text="Wie lange halten die Schmerzen an? (z.B. wenige Sekunden, Minuten, dauerhaft)",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="schmerzcharakter",
-        text="Wie würden Sie den Schmerz beschreiben? (z.B. drückend, stechend, brennend, eng)",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="ausstrahlung",
-        text="Strahlt der Schmerz aus? (z.B. in den linken Arm, Kiefer, Rücken, Bauch, oder keine Ausstrahlung)",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="belastungsabhaengigkeit",
-        text="Treten die Schmerzen bei körperlicher Belastung auf oder verstärken sie sich dabei?",
+        "ploetzlicher_beginn",
+        "Haben die Schmerzen plötzlich begonnen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="ruhe_besserung",
-        text="Bessern sich die Schmerzen in Ruhe?",
+        "dauer",
+        (
+            "Wie lange halten die Schmerzen jeweils an? "
+            "(z. B. wenige Sekunden, einige Minuten, länger als 20 Minuten oder dauerhaft)"
+        ),
+    ),
+    AnamnesisQuestion(
+        "schmerzen_aktuell",
+        "Haben Sie die Schmerzen gerade jetzt?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="atemnot",
-        text="Haben Sie aktuell Atemnot oder Kurzatmigkeit?",
+        "schmerzstaerke",
+        "Wie stark sind die Schmerzen gerade? 0 bedeutet keine Schmerzen, 10 die stärksten vorstellbaren Schmerzen.",
+        input_type="zahl",
+        slider_min=0,
+        slider_max=10,
+        slider_step=1,
+    ),
+    AnamnesisQuestion(
+        "schmerzcharakter",
+        "Wie fühlen sich die Schmerzen an? (z. B. Druck, Enge, Brennen, Stechen oder Ziehen)",
+    ),
+    AnamnesisQuestion(
+        "ausstrahlung",
+        (
+            "Ziehen die Schmerzen in eine andere Körperstelle? "
+            "(z. B. linker oder rechter Arm, beide Arme, Hals, Unterkiefer, Rücken, Oberbauch oder nirgendwohin)"
+        ),
+    ),
+    AnamnesisQuestion(
+        "belastungsabhaengigkeit",
+        "Beginnen oder verstärken sich die Schmerzen bei Anstrengung, zum Beispiel beim Gehen oder Treppensteigen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="uebelkeit",
-        text="Haben Sie Übelkeit oder mussten Sie erbrechen?",
+        "ruhe_besserung",
+        "Werden die Schmerzen besser, wenn Sie sich ausruhen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="kaltschweissigkeit",
-        text="Schwitzen Sie ungewöhnlich oder haben Sie Kaltschweißigkeit bemerkt?",
+        "bewegung_atmung_husten",
+        "Werden die Schmerzen stärker, wenn Sie sich bewegen, tief einatmen oder husten?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="synkope",
-        text="Hatten Sie eine Ohnmacht oder das Gefühl, gleich ohnmächtig zu werden?",
+        "druckschmerz_thoraxwand",
+        "Können Sie die Schmerzen durch Druck auf die schmerzende Stelle auslösen oder verstärken?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="ausgepraege_schwaeche",
-        text="Fühlen Sie sich ungewöhnlich schwach oder erschöpft?",
+        "essen_schlucken",
+        "Hängen die Schmerzen mit Essen oder Schlucken zusammen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="bekannte_khk",
-        text="Ist bei Ihnen eine Herzerkrankung bekannt (z.B. koronare Herzkrankheit, früherer Herzinfarkt)?",
+        "sodbrennen",
+        "Haben Sie gleichzeitig Sodbrennen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="alter_ueber_55",
-        text="Sind Sie älter als 55 Jahre?",
+        "uebelkeit",
+        "Ist Ihnen übel oder mussten Sie erbrechen?",
         input_type="ja_nein",
     ),
     AnamnesisQuestion(
-        key="kardiovaskulaere_risikofaktoren",
-        text="Welche Risikofaktoren liegen bei Ihnen vor? (z.B. Rauchen, Diabetes, Bluthochdruck, hohe Cholesterinwerte, Übergewicht, Familienanamnese)",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="vorerkrankungen",
-        text="Welche weiteren Vorerkrankungen sind bei Ihnen bekannt?",
-        input_type="freitext",
-    ),
-    AnamnesisQuestion(
-        key="druckschmerz_thoraxwand",
-        text="Ist der Schmerz durch Druck auf die Brustwand reproduzierbar?",
+        "atemnot",
+        "Bekommen Sie schlechter Luft als sonst?",
         input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "ruhedyspnoe",
+        "Bekommen Sie auch im Sitzen oder Liegen schlecht Luft?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "kaltschweissigkeit",
+        "Haben Sie ungewöhnlich stark oder kalt geschwitzt?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "synkope",
+        "Sind Sie seit Beginn der Schmerzen ohnmächtig geworden oder beinahe zusammengebrochen?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "verwirrtheit",
+        "Fühlen Sie sich plötzlich verwirrt, sehr benommen oder ungewöhnlich schlecht orientiert?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "ausgepraege_schwaeche",
+        "Fühlen Sie sich so schwach oder krank, dass Sie Ihren Alltag kaum bewältigen können?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "rasche_verschlechterung",
+        "Sind die Schmerzen oder andere Beschwerden in den letzten 24 Stunden stärker oder häufiger geworden?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "aehnliche_schmerzen",
+        "Hatten Sie schon einmal ähnliche Schmerzen? Falls ja: Was war damals die Ursache?",
+    ),
+    AnamnesisQuestion(
+        "patient_vermutet_herz",
+        "Glauben Sie selbst, dass die Schmerzen vom Herzen kommen könnten?",
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "bekannte_khk",
+        (
+            "Ist bei Ihnen eine Erkrankung des Herzens oder der Blutgefäße bekannt, "
+            "zum Beispiel ein früherer Herzinfarkt, Schlaganfall oder verengte Blutgefäße?"
+        ),
+        input_type="ja_nein",
+    ),
+    AnamnesisQuestion(
+        "kardiovaskulaere_risikofaktoren",
+        (
+            "Trifft etwas davon auf Sie zu: Rauchen, hoher Blutdruck, Zuckerkrankheit, "
+            "hohe Blutfettwerte, starkes Übergewicht oder frühe Herzerkrankungen bei Eltern oder Geschwistern? "
+            "Schreiben Sie bitte alles Zutreffende auf oder 'nichts davon'."
+        ),
+    ),
+    AnamnesisQuestion(
+        "vorerkrankungen",
+        "Welche anderen länger bestehenden Krankheiten haben Sie? Schreiben Sie 'keine', wenn keine bekannt sind.",
     ),
 ]
 
 
-# --- Marburger Herzscore (didaktische Annäherung) ---
-# Quelle: Bosner et al., DEGAM-Leitlinie Brustschmerz
-# ACHTUNG: Keine Diagnose, keine Entwarnung, keine Risikobewertung.
-# Dient ausschließlich der strukturierten Dokumentation für ärztliches Personal.
-
-def berechne_marburger_herzscore(answers: dict[str, str]) -> dict[str, int | str]:
+def berechne_marburger_herzscore(
+    answers: dict[str, str],
+    *,
+    alter: int | None = None,
+    geschlecht: str = "",
+) -> dict[str, int | str]:
+    """Dokumentiert die fünf Originalkriterien des Marburger Herzscores."""
     score = 0
     details: list[str] = []
 
-    if _ja(answers.get("alter_ueber_55", "")):
-        # Kriterium 1: Alter/Geschlecht (>=55 bei Maennern, >=65 bei Frauen)
-        # Vereinfacht: Alter > 55 als Proxy
+    geschlecht_normalisiert = geschlecht.strip().lower()
+    alterskriterium = (
+        alter is not None
+        and (
+            (geschlecht_normalisiert in ("m", "maennlich", "männlich", "male") and alter >= 55)
+            or (geschlecht_normalisiert in ("w", "weiblich", "female") and alter >= 65)
+        )
+    )
+    if alterskriterium:
         score += 1
-        details.append("Alter >55 (+1)")
+        details.append("Alters- und Geschlechtskriterium erfüllt (+1)")
 
     if _ja(answers.get("bekannte_khk", "")):
         score += 1
-        details.append("Bekannte vaskuläre Erkrankung (+1)")
+        details.append("Bekannte Erkrankung der Blutgefäße (+1)")
 
     if _ja(answers.get("belastungsabhaengigkeit", "")):
         score += 1
-        details.append("Belastungsabhaengigkeit (+1)")
+        details.append("Schmerzen bei Anstrengung (+1)")
 
-    if not _ja(answers.get("druckschmerz_thoraxwand", "")):
+    if _nein(answers.get("druckschmerz_thoraxwand", "")):
         score += 1
-        details.append("Schmerz nicht durch Palpation reproduzierbar (+1)")
+        details.append("Schmerz durch Druck nicht auslösbar (+1)")
 
-    # Kriterium 5: Patient vermutet kardiale Ursache (nicht direkt abgefragt,
-    # aber Ausstrahlung + Schmerzcharakter als Proxy)
-    ausstrahlung = answers.get("ausstrahlung", "").lower()
-    if any(kw in ausstrahlung for kw in ("arm", "kiefer", "linke")):
+    if _ja(answers.get("patient_vermutet_herz", "")):
         score += 1
-        details.append("Typische Ausstrahlung (+1)")
-
-    risiko_text = "niedrig"
-    if score >= 3:
-        risiko_text = "erhöhte Wahrscheinlichkeit für KHK"
-    elif score >= 1:
-        risiko_text = "intermediär"
+        details.append("Patient vermutet das Herz als Ursache (+1)")
 
     return {
         "score": score,
         "max_score": 5,
-        "details": ", ".join(details) if details else "keine Kriterien erfüllt",
-        "einordnung": risiko_text,
+        "details": ", ".join(details) if details else "kein Kriterium erfüllt",
+        "einordnung": "Nur ärztlich und zusammen mit der gesamten Untersuchung zu bewerten.",
         "hinweis": (
-            "Der Marburger Herzscore dient ausschließlich der didaktischen "
-            "Strukturierung. Er stellt keine Diagnose und keine Risikobewertung dar. "
-            "Die ärztliche Bewertung ist zwingend erforderlich."
+            "Der Marburger Herzscore ersetzt weder die Suche nach Warnzeichen noch die "
+            "ärztliche Untersuchung. Er darf nicht zur Entwarnung verwendet werden."
         ),
     }
 
 
 def _ja(value: str) -> bool:
     return value.strip().lower() in ("ja", "j", "yes", "y")
+
+
+def _nein(value: str) -> bool:
+    return value.strip().lower() in ("nein", "n", "no")

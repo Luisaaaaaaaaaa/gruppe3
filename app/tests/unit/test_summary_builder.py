@@ -190,6 +190,26 @@ class TestBuildGroupedSections:
             == "Nebenwirkungen"
         )
 
+    def test_chest_pain_scenario_has_clear_sections(self) -> None:
+        sections = build_grouped_sections(
+            "B",
+            {
+                "lokalisation": "Mitte der Brust",
+                "beginn": "vor 30 Minuten",
+                "schmerzcharakter": "Druck",
+                "atemnot": "ja",
+                "bekannte_khk": "nein",
+                "medikamente": "ASS 100 mg",
+            },
+            {"puls": 92},
+        )
+
+        assert sections["Beginn und Verlauf"]["Ort der Schmerzen"] == "Mitte der Brust"
+        assert sections["Art und Auslöser"]["Art der Schmerzen"] == "Druck"
+        assert sections["Begleitende Beschwerden"]["Schlechter Luft"] == "ja"
+        assert sections["Medikamente"]["Aktuelle Medikamente"] == "ASS 100 mg"
+        assert sections["Messwerte"]["Puls pro Minute"] == "92"
+
     def test_diabetes_scenario_has_sections(self) -> None:
         answers = {
             "gewicht_aktuell": "85",

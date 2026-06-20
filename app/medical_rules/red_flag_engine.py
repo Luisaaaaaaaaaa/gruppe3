@@ -160,6 +160,14 @@ def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | N
             triggered_by="atemnot=ja",
         ))
 
+    if _parse_ja_nein(answers.get("ruhedyspnoe", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-015",
+            description="Atemnot im Sitzen oder Liegen bei Brustschmerz: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by="ruhedyspnoe=ja",
+        ))
+
     if _parse_ja_nein(answers.get("kaltschweissigkeit", "")):
         flags.append(RedFlag(
             rule_id="CP-RF-002",
@@ -206,9 +214,51 @@ def check_chest_pain(answers: dict[str, str], vitals: dict[str, int | float] | N
     if _parse_ja_nein(answers.get("ausgepraege_schwaeche", "")):
         flags.append(RedFlag(
             rule_id="CP-RF-007",
-            description="Ausgeprägte Schwäche bei Brustschmerz: Hinweis auf hämodynamische Instabilität.",
-            severity="warning",
+            description="Sehr starke Schwäche bei Brustschmerz: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
             triggered_by="ausgepraege_schwaeche=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("verwirrtheit", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-016",
+            description="Plötzliche Verwirrtheit oder starke Benommenheit bei Brustschmerz: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by="verwirrtheit=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("rasche_verschlechterung", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-017",
+            description="Brustschmerzen sind in den letzten 24 Stunden stärker oder häufiger geworden: Sofortige ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by="rasche_verschlechterung=ja",
+        ))
+
+    schmerzstaerke = _parse_number(answers.get("schmerzstaerke", ""))
+    if (
+        schmerzstaerke is not None
+        and schmerzstaerke >= 8
+        and _parse_ja_nein(answers.get("schmerzen_aktuell", ""))
+    ):
+        flags.append(RedFlag(
+            rule_id="CP-RF-018",
+            description="Aktuell sehr starke Brustschmerzen: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by=f"schmerzen_aktuell=ja+schmerzstaerke={schmerzstaerke:g}",
+        ))
+
+    dauer = answers.get("dauer", "").strip().lower()
+    lang_anhaltend = any(keyword in dauer for keyword in (
+        "dauerhaft", "seit stunden", "stunde", "länger als 20", "laenger als 20",
+        ">20", "30 min", "30min", "halbe stunde",
+    ))
+    if lang_anhaltend and _parse_ja_nein(answers.get("schmerzen_aktuell", "")):
+        flags.append(RedFlag(
+            rule_id="CP-RF-019",
+            description="Brustschmerzen halten länger an und bestehen noch: Sofortige ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by=f"dauer={answers.get('dauer', '')}+schmerzen_aktuell=ja",
         ))
 
     if _parse_ja_nein(answers.get("uebelkeit", "")):

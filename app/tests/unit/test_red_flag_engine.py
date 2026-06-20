@@ -384,10 +384,30 @@ class TestCheckChestPain:
         flags = check_chest_pain(answers)
         assert any(f.rule_id == "CP-RF-006" and f.severity == "warning" for f in flags)
 
-    def test_severe_weakness_warning(self) -> None:
+    def test_severe_weakness_critical(self) -> None:
         answers = {"ausgepraege_schwaeche": "ja"}
         flags = check_chest_pain(answers)
-        assert any(f.rule_id == "CP-RF-007" and f.severity == "warning" for f in flags)
+        assert any(f.rule_id == "CP-RF-007" and f.severity == "critical" for f in flags)
+
+    @pytest.mark.parametrize(
+        ("key", "rule_id"),
+        [
+            ("ruhedyspnoe", "CP-RF-015"),
+            ("verwirrtheit", "CP-RF-016"),
+            ("rasche_verschlechterung", "CP-RF-017"),
+        ],
+    )
+    def test_new_direct_warning_signs_are_critical(self, key: str, rule_id: str) -> None:
+        flags = check_chest_pain({key: "ja"})
+        assert any(f.rule_id == rule_id and f.severity == "critical" for f in flags)
+
+    def test_current_severe_pain_is_critical(self) -> None:
+        flags = check_chest_pain({"schmerzen_aktuell": "ja", "schmerzstaerke": "8"})
+        assert any(f.rule_id == "CP-RF-018" and f.severity == "critical" for f in flags)
+
+    def test_persistent_current_pain_is_critical(self) -> None:
+        flags = check_chest_pain({"schmerzen_aktuell": "ja", "dauer": "seit 30 Minuten"})
+        assert any(f.rule_id == "CP-RF-019" and f.severity == "critical" for f in flags)
 
     def test_nausea_plus_cold_sweat_critical(self) -> None:
         answers = {"uebelkeit": "ja", "kaltschweissigkeit": "ja"}
