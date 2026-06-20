@@ -53,7 +53,9 @@ def build_summary(
         and (not value.strip() or value.strip().lower() == "unbekannt")
     ]
 
-    grouped_sections = build_grouped_sections(scenario, answers, vitals)
+    grouped_sections = build_grouped_sections(
+        scenario, answers, vitals, patient.medications
+    )
 
     return AnamnesisSummary(
         patient_id=patient.patient_id,
@@ -71,7 +73,10 @@ def build_summary(
 
 
 def build_grouped_sections(
-    scenario: str, answers: dict[str, str], vitals: dict
+    scenario: str,
+    answers: dict[str, str],
+    vitals: dict,
+    patient_medications: list[str] | None = None,
 ) -> dict[str, dict[str, str]]:
     sections: dict[str, dict[str, str]] = {}
 
@@ -79,6 +84,95 @@ def build_grouped_sections(
         sections["Vorerkrankungen / Risikofaktoren (aktueller Stand)"] = {
             "Allgemein": answers.get("vorerkrankungen_aktuell", "")
         }
+
+    if scenario in ("A", "cough"):
+        def add_section(title: str, fields: dict[str, str]) -> None:
+            non_empty = {key: value for key, value in fields.items() if value.strip()}
+            if non_empty:
+                sections[title] = non_empty
+
+        add_section("Beginn und Verlauf", {
+            "Dauer der Beschwerden": answers.get("symptom_dauer", ""),
+            "Rasche Verschlechterung": answers.get("rasche_verschlechterung", ""),
+        })
+        add_section("Husten und Schleim", {
+            "Art des Hustens": answers.get("hustenart", ""),
+            "Schleim beim Husten": answers.get("auswurf", ""),
+            "Farbe des Schleims": answers.get("auswurf_farbe", ""),
+            "Blut beim Husten": answers.get("blutbeimengung", ""),
+        })
+        add_section("Atmung und Brustbeschwerden", {
+            "Kurzatmigkeit": answers.get("dyspnoe", ""),
+            "Atemnot in Ruhe": answers.get("ruhedyspnoe", ""),
+            "Luftholen beim Sprechen": answers.get("sprechen_beeintraechtigt", ""),
+            "Kurzatmigkeit bei Belastung": answers.get("belastungsdyspnoe", ""),
+            "Bläuliche Lippen oder Gesicht": answers.get("zyanose", ""),
+            "Auffälliges Atemgeräusch": answers.get("auffaelliges_atemgeraeusch", ""),
+            "Schmerzen oder Druck in der Brust": answers.get("thorakale_schmerzen", ""),
+            "Schmerzen beim Atmen oder Husten": answers.get("atemabhaengige_schmerzen", ""),
+        })
+        add_section("Fieber und Allgemeinzustand", {
+            "Fieber": answers.get("fieber", ""),
+            "Höchste gemessene Temperatur": answers.get("korpertemperatur", ""),
+            "Schüttelfrost": answers.get("schuettelfrost", ""),
+            "Verwirrtheit": answers.get("verwirrtheit", ""),
+            "Ohnmacht oder Beinahe-Zusammenbruch": answers.get("ohnmacht", ""),
+            "Starke Schwäche": answers.get("reduzierter_allgemeinzustand", ""),
+        })
+
+        risks = {
+            "Rauch oder reizende Dämpfe eingeatmet": answers.get("rauch_reizstoffe", ""),
+            "Kürzliche Brustkorbverletzung": answers.get("brustverletzung", ""),
+            "Dauerhafte Lungenerkrankung": answers.get("chronische_lungenerkrankung", ""),
+            "Herzschwäche": answers.get("herzschwaeche", ""),
+            "Stark geschwächte Abwehr": answers.get("immunschwaeche", ""),
+            "Weitere Vorerkrankungen": answers.get("vorerkrankungen", ""),
+            "Weitere Risiken": answers.get("risikofaktoren", ""),
+            "Änderungen laut Patientenakte": answers.get("vorerkrankungen_aktuell", ""),
+            "Vorerkrankungen laut Patientenakte": answers.get("vorerkrankungen_liste", ""),
+        }
+        for key, value in answers.items():
+            if key.startswith("risikofaktor_"):
+                risks[f"Risikofaktor {key.removeprefix('risikofaktor_')}"] = value
+        add_section("Vorerkrankungen und Risiken", risks)
+
+        medications = {}
+        if answers.get("medikamente", "").strip():
+            medications["Aktuelle Medikamente"] = answers["medikamente"]
+        for key, value in answers.items():
+            if key.startswith("med_adhaerenz_grund_"):
+                index = int(key.removeprefix("med_adhaerenz_grund_"))
+                name = (
+                    patient_medications[index]
+                    if patient_medications and index < len(patient_medications)
+                    else f"Medikament {index + 1}"
+                )
+                medications[f"Grund für abweichende Einnahme von {name}"] = value
+            elif key.startswith("med_adhaerenz_"):
+                index = int(key.removeprefix("med_adhaerenz_"))
+                name = (
+                    patient_medications[index]
+                    if patient_medications and index < len(patient_medications)
+                    else f"Medikament {index + 1}"
+                )
+                medications[f"{name} wie verordnet"] = value
+        add_section("Medikamente", medications)
+
+        measurements = {
+            "Angegebene Atemzüge pro Minute": answers.get("atemfrequenz", ""),
+        }
+        vital_labels = {
+            "temperatur": "Temperatur in °C",
+            "atemfrequenz": "Atemzüge pro Minute",
+            "spo2": "Sauerstoffsättigung in %",
+            "puls": "Puls pro Minute",
+        }
+        for key, value in vitals.items():
+            if key in vital_labels:
+                measurements[vital_labels[key]] = str(value)
+        add_section("Messwerte", measurements)
+
+        return sections
 
     if scenario in ("D", "diabetes"):
         verlauf: dict[str, str] = {}

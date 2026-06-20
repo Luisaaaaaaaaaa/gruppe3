@@ -149,6 +149,47 @@ class TestBuildSummary:
 
 
 class TestBuildGroupedSections:
+    def test_cough_scenario_has_structured_handover(self) -> None:
+        answers = {
+            "symptom_dauer": "3 Tage",
+            "rasche_verschlechterung": "nein",
+            "hustenart": "trocken",
+            "auswurf": "nein",
+            "dyspnoe": "nein",
+            "fieber": "ja",
+            "korpertemperatur": "38,5 °C",
+            "chronische_lungenerkrankung": "nein",
+            "medikamente": "keine",
+        }
+        sections = build_grouped_sections(
+            "A", answers, {"temperatur": 38.5, "atemfrequenz": 18}
+        )
+
+        assert sections["Beginn und Verlauf"]["Dauer der Beschwerden"] == "3 Tage"
+        assert sections["Husten und Schleim"]["Art des Hustens"] == "trocken"
+        assert sections["Fieber und Allgemeinzustand"]["Fieber"] == "ja"
+        assert sections["Medikamente"]["Aktuelle Medikamente"] == "keine"
+        assert sections["Messwerte"]["Atemzüge pro Minute"] == "18"
+
+    def test_cough_handover_includes_medication_names(self) -> None:
+        sections = build_grouped_sections(
+            "A",
+            {
+                "med_adhaerenz_0": "ja",
+                "med_adhaerenz_1": "nein",
+                "med_adhaerenz_grund_1": "Nebenwirkungen",
+            },
+            {},
+            ["Ramipril 5 mg", "Salbutamol"],
+        )
+
+        assert sections["Medikamente"]["Ramipril 5 mg wie verordnet"] == "ja"
+        assert sections["Medikamente"]["Salbutamol wie verordnet"] == "nein"
+        assert (
+            sections["Medikamente"]["Grund für abweichende Einnahme von Salbutamol"]
+            == "Nebenwirkungen"
+        )
+
     def test_diabetes_scenario_has_sections(self) -> None:
         answers = {
             "gewicht_aktuell": "85",

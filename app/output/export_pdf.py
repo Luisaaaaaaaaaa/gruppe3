@@ -2,26 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from io import BytesIO
-
-from reportlab.lib.colors import HexColor
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    HRFlowable,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
-)
+from typing import TYPE_CHECKING, Any
 
 from app.output.summary_builder import AnamnesisSummary
 from app.patient_import.patient_schema import PatientRecord
 
-ACCENT_COLOR = HexColor("#0f766e")
-DANGER_COLOR = HexColor("#9f1d20")
-WARNING_COLOR = HexColor("#b55a07")
+if TYPE_CHECKING:
+    from reportlab.lib.styles import ParagraphStyle
 
 
 def build_preview_html(
@@ -111,6 +98,29 @@ def _html_section_raw(title: str, html: str) -> str:
 def export_summary_pdf(
     summary: AnamnesisSummary, patient: PatientRecord
 ) -> bytes:
+    try:
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (
+            HRFlowable,
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Das Python-Paket 'reportlab' fehlt. Bitte installiere die "
+            "Projektabhaengigkeiten mit 'pip install -r requirements.txt'."
+        ) from exc
+
+    accent_color = HexColor("#0f766e")
+    danger_color = HexColor("#9f1d20")
+    warning_color = HexColor("#b55a07")
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -126,7 +136,7 @@ def export_summary_pdf(
     title_style = ParagraphStyle(
         "TitleCustom",
         parent=styles["Title"],
-        textColor=ACCENT_COLOR,
+        textColor=accent_color,
         spaceAfter=4 * mm,
     )
     heading_style = ParagraphStyle(
@@ -165,7 +175,7 @@ def export_summary_pdf(
     elements.append(
         Paragraph(f"Szenario: {scenario_text}<br/>Erstellt: {timestamp}", small_style)
     )
-    elements.append(HRFlowable(width="100%", color=ACCENT_COLOR))
+    elements.append(HRFlowable(width="100%", color=accent_color))
     elements.append(Spacer(1, 4 * mm))
 
     patient_name = f"{patient.first_name} {patient.last_name}"
@@ -219,9 +229,9 @@ def export_summary_pdf(
         rf_colors = []
         for rf in summary.red_flags:
             if rf.severity == "critical":
-                rf_colors.append(DANGER_COLOR)
+                rf_colors.append(danger_color)
             elif rf.severity == "warning":
-                rf_colors.append(WARNING_COLOR)
+                rf_colors.append(warning_color)
             else:
                 rf_colors.append(HexColor("#60716d"))
 
@@ -267,12 +277,17 @@ def export_summary_pdf(
 
 
 def _add_section(
-    elements: list,
+    elements: list[Any],
     title: str,
     rows: list[tuple[str, str]],
-    label_style: ParagraphStyle,
-    value_style: ParagraphStyle,
+    label_style: "ParagraphStyle",
+    value_style: "ParagraphStyle",
 ) -> None:
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import HRFlowable, Paragraph, Spacer, Table, TableStyle
+
     section_heading = ParagraphStyle(
         "SectionHeading",
         parent=label_style,

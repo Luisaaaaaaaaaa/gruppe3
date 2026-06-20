@@ -35,32 +35,38 @@ class TestCheckCough:
         flags = check_cough(answers)
         assert flags == []
 
-    def test_dyspnoe_critical(self) -> None:
+    def test_dyspnoea_requires_review(self) -> None:
         answers = {"dyspnoe": "ja"}
         flags = check_cough(answers)
-        assert any(f.rule_id == "COUGH-RF-001" and f.severity == "critical" for f in flags)
+        assert any(f.rule_id == "COUGH-RF-001" and f.severity == "warning" for f in flags)
 
     def test_haemoptysen_critical(self) -> None:
         answers = {"blutbeimengung": "ja"}
         flags = check_cough(answers)
         assert any(f.rule_id == "COUGH-RF-002" and f.severity == "critical" for f in flags)
 
-    def test_fieber_alone_warning(self) -> None:
-        answers = {"fieber": "ja", "dyspnoe": "nein", "thorakale_schmerzen": "nein"}
+    def test_high_fever_warning(self) -> None:
+        answers = {"fieber": "ja", "korpertemperatur": "39,4 °C"}
         flags = check_cough(answers)
         rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
         assert rf.severity == "warning"
 
-    def test_fieber_plus_dyspnoe_critical(self) -> None:
-        answers = {"fieber": "ja", "dyspnoe": "ja"}
+    def test_very_high_fever_critical(self) -> None:
+        answers = {"fieber": "ja", "korpertemperatur": "40,0 °C"}
         flags = check_cough(answers)
         rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
         assert rf.severity == "critical"
 
-    def test_fieber_plus_thoraxschmerz_critical(self) -> None:
+    def test_fever_plus_dyspnoea_critical(self) -> None:
+        answers = {"fieber": "ja", "dyspnoe": "ja"}
+        flags = check_cough(answers)
+        rf = next(f for f in flags if f.rule_id == "COUGH-RF-010")
+        assert rf.severity == "critical"
+
+    def test_fever_plus_chest_pain_critical(self) -> None:
         answers = {"fieber": "ja", "thorakale_schmerzen": "ja"}
         flags = check_cough(answers)
-        rf = next(f for f in flags if f.rule_id == "COUGH-RF-003")
+        rf = next(f for f in flags if f.rule_id == "COUGH-RF-010")
         assert rf.severity == "critical"
 
     def test_thorakale_schmerzen_warning(self) -> None:
@@ -81,7 +87,7 @@ class TestCheckCough:
     def test_immunsuppression_detected(self) -> None:
         answers = {"vorerkrankungen": "Immunsuppression nach Transplantation", "fieber": "nein"}
         flags = check_cough(answers)
-        assert any(f.rule_id == "COUGH-RF-005" for f in flags)
+        assert any(f.rule_id == "COUGH-RF-005" and f.severity == "critical" for f in flags)
 
     def test_herzinsuffizienz_detected(self) -> None:
         answers = {"vorerkrankungen": "Herzinsuffizienz NYHA III", "fieber": "nein"}
@@ -128,6 +134,35 @@ class TestCheckCough:
     def test_missing_fields_no_crash(self) -> None:
         flags = check_cough({})
         assert flags == []
+
+    @pytest.mark.parametrize(
+        ("key", "rule_id"),
+        [
+            ("ruhedyspnoe", "COUGH-RF-011"),
+            ("sprechen_beeintraechtigt", "COUGH-RF-012"),
+            ("zyanose", "COUGH-RF-013"),
+            ("verwirrtheit", "COUGH-RF-014"),
+            ("ohnmacht", "COUGH-RF-015"),
+            ("auffaelliges_atemgeraeusch", "COUGH-RF-016"),
+            ("rauch_reizstoffe", "COUGH-RF-017"),
+            ("rasche_verschlechterung", "COUGH-RF-018"),
+        ],
+    )
+    def test_direct_warning_signs_are_critical(self, key: str, rule_id: str) -> None:
+        flags = check_cough({key: "ja"})
+        assert any(f.rule_id == rule_id and f.severity == "critical" for f in flags)
+
+    def test_respiratory_rate_30_is_critical(self) -> None:
+        flags = check_cough({"atemfrequenz": "30 Atemzüge"})
+        assert any(f.rule_id == "COUGH-RF-021" and f.severity == "critical" for f in flags)
+
+    def test_very_poor_general_condition_is_critical(self) -> None:
+        flags = check_cough({"reduzierter_allgemeinzustand": "ja"})
+        assert any(f.rule_id == "COUGH-RF-019" and f.severity == "critical" for f in flags)
+
+    def test_pulse_120_is_critical(self) -> None:
+        flags = check_cough({}, vitals={"puls": 120})
+        assert any(f.rule_id == "COUGH-RF-022" and f.severity == "critical" for f in flags)
 
     def test_multiple_flags_severe_case(self) -> None:
         answers = {

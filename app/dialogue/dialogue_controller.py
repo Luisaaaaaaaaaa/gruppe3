@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from pathlib import Path
 from typing import Callable
@@ -96,6 +97,7 @@ class DialogueController:
         self._state_machine = StateMachine()
         self._answers: dict[str, str] = {}
         self._vitals: dict[str, int | float] = {}
+        self._vitals_source = "nicht erhoben"
         self._red_flags: list[RedFlag] = []
         self._summary: AnamnesisSummary | None = None
         self._export_path: Path | None = None
@@ -390,9 +392,17 @@ class DialogueController:
             return (answers.get(adhaerenz_key) or "").strip().lower() in ("nein", "n", "no")
 
         if self._scenario_id == "cough":
-            if question_key == "korpertemperatur":
-                fieber_antwort = (answers.get("fieber") or "").strip().lower()
-                return fieber_antwort in ("ja", "j", "yes", "y")
+            follow_ups = {
+                "auswurf_farbe": "auswurf",
+                "korpertemperatur": "fieber",
+                "ruhedyspnoe": "dyspnoe",
+                "sprechen_beeintraechtigt": "dyspnoe",
+                "atemabhaengige_schmerzen": "thorakale_schmerzen",
+            }
+            parent_key = follow_ups.get(question_key)
+            if parent_key:
+                parent_answer = (answers.get(parent_key) or "").strip().lower()
+                return parent_answer in ("ja", "j", "yes", "y")
             return True
 
         if self._scenario_id == "diabetes":
@@ -447,6 +457,10 @@ class DialogueController:
         self._answers[question.key] = answer.strip()
         log_answer(question.key, answer.strip())
         self._current_question_index += 1
+
+        if self._escalate_critical_cough_answers():
+            return
+
         self._ask_next_question()
 
     def submit_mass_anamnesis(self, answers: dict[str, str]) -> None:
@@ -464,11 +478,20 @@ class DialogueController:
             if self.is_question_visible(q.key, self._answers)
         )
 
+        if self._escalate_critical_cough_answers():
+            return
+
         self._state_machine.advance()
         self._handle_state()
 
     def _measure_vitals(self) -> None:
         log_state_change("ANAMNESIS", "VITAL_PARAMETERS")
+
+        if self._scenario_id == "cough":
+            self._measure_cough_vitals()
+            self._state_machine.advance()
+            self._handle_state()
+            return
 
         sys_str = (self._answers.get("blutdruck_systolisch") or "").strip()
         dia_str = (self._answers.get("blutdruck_diastolisch") or "").strip()
@@ -484,6 +507,7 @@ class DialogueController:
                 "systolisch": float(sys_str.replace(",", ".")),
                 "diastolisch": float(dia_str.replace(",", ".")),
             }
+            self._vitals_source = "Patientenangabe"
             self._display(
                 f"Blutdruck aus Anamnese übernommen: "
                 f"{self._vitals['systolisch']}/{self._vitals['diastolisch']} mmHg"
@@ -495,6 +519,7 @@ class DialogueController:
                 "systolisch": bp["systolisch"],
                 "diastolisch": bp["diastolisch"],
             }
+            self._vitals_source = "simuliert"
             log_info(
                 f"Vitalparameter simuliert: {bp['systolisch']}/{bp['diastolisch']} mmHg"
             )
@@ -528,6 +553,74 @@ class DialogueController:
 
         self._state_machine.advance()
         self._handle_state()
+
+    def _measure_cough_vitals(self) -> None:
+        self._vitals = {}
+        patient_values = False
+
+        temperatur = _extract_number(self._answers.get("korpertemperatur", ""))
+        if temperatur is not None:
+            self._vitals["temperatur"] = temperatur
+            patient_values = True
+
+        atemfrequenz = _extract_number(self._answers.get("atemfrequenz", ""))
+        if atemfrequenz is not None:
+            self._vitals["atemfrequenz"] = atemfrequenz
+            patient_values = True
+
+        pulse_ox_needed = any(
+            _is_yes(self._answers.get(key, ""))
+            for key in (
+                "dyspnoe",
+                "belastungsdyspnoe",
+                "reduzierter_allgemeinzustand",
+                "thorakale_schmerzen",
+                "chronische_lungenerkrankung",
+            )
+        ) or (temperatur is not None and temperatur >= 39)
+
+        if pulse_ox_needed:
+            simulator = Simulator(
+                geschlecht=self._patient.details.gender,
+                groesse_cm=self._patient.details.groesse_cm,
+                alter=_calculate_age(self._patient.date_of_birth),
+            )
+            pulse_ox = simulator.pulsoximeter()
+            self._vitals.update(pulse_ox)
+            self._vitals_source = (
+                "Patientenangabe und Pulsoximeter-Simulator"
+                if patient_values
+                else "Pulsoximeter-Simulator"
+            )
+            self._display(
+                f"Pulsoximeter simuliert: Sauerstoffsättigung {pulse_ox['spo2']} %, "
+                f"Puls {pulse_ox['puls']}/min [Quelle: Gerätesimulator]"
+            )
+        elif patient_values:
+            self._vitals_source = "Patientenangabe"
+        else:
+            self._vitals_source = "nicht erhoben"
+
+    def _escalate_critical_cough_answers(self) -> bool:
+        if self._scenario_id != "cough":
+            return False
+
+        flags = check(
+            scenario=self._scenario_id,
+            answers=self._answers,
+            vitals=self._vitals,
+            patient_medications=self._patient.medications,
+        )
+        if not any(flag.severity == "critical" for flag in flags):
+            return False
+
+        self._red_flags = flags
+        for flag in flags:
+            log_red_flag(flag.rule_id, flag.description, flag.severity)
+        log_escalation("Kritisches Warnzeichen während der Husten-Anamnese")
+        self._state_machine.jump_to(DialogueState.ESCALATION)
+        self._handle_state()
+        return True
 
     def _check_red_flags(self) -> None:
         log_state_change("VITAL_PARAMETERS", "RED_FLAG_CHECK")
@@ -572,7 +665,7 @@ class DialogueController:
             self._display(f"    Ausgelöst durch: {rf.triggered_by}")
         self._display("")
         self._display(
-            "Bitte informieren Sie umgehend das ärztliche Personal. "
+            "Bitte sofort dem Praxisteam melden. "
             "Die Anamnese wird nicht als Routinefall fortgesetzt."
         )
         self._display("================================")
@@ -688,7 +781,7 @@ class DialogueController:
             scenario=self._scenario_key,
             answers=self._answers,
             vitals=self._vitals,
-            vitals_source="simuliert",
+            vitals_source=self._vitals_source,
             red_flags=self._red_flags,
         )
 
@@ -707,3 +800,14 @@ def _is_number_or_unknown(value: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _is_yes(value: str) -> bool:
+    return value.strip().lower() in ("ja", "j", "yes", "y")
+
+
+def _extract_number(value: str) -> float | None:
+    match = re.search(r"\d+(?:[.,]\d+)?", value)
+    if not match:
+        return None
+    return float(match.group(0).replace(",", "."))

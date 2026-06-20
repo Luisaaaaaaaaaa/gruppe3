@@ -453,53 +453,81 @@ def check_cough(answers: dict[str, str], vitals: dict[str, int | float] | None =
     if _parse_ja_nein(answers.get("dyspnoe", "")):
         flags.append(RedFlag(
             rule_id="COUGH-RF-001",
-            description="Atemnot bei akutem Husten: Pneumonie oder kardiopulmonale Ursache nicht auszuschließen.",
-            severity="critical",
+            description="Ungewöhnliche Kurzatmigkeit bei akutem Husten: ärztliche Sichtung erforderlich.",
+            severity="warning",
             triggered_by="dyspnoe=ja",
         ))
 
     if _parse_ja_nein(answers.get("blutbeimengung", "")):
         flags.append(RedFlag(
             rule_id="COUGH-RF-002",
-            description="Hämoptysen (Blut im Auswurf): Sofortige ärztliche Abklärung erforderlich.",
+            description="Blut beim Husten: sofortige ärztliche Sichtung erforderlich.",
             severity="critical",
             triggered_by="blutbeimengung=ja",
         ))
 
-    if _parse_ja_nein(answers.get("fieber", "")):
-        severity = "warning"
-        if _parse_ja_nein(answers.get("dyspnoe", "")) or _parse_ja_nein(answers.get("thorakale_schmerzen", "")):
-            severity = "critical"
+    # Projektannahme: ab 39 °C wird Fieber als hoch dokumentiert; ab 40 °C
+    # erfolgt wegen der ausgeprägten Abweichung eine sofortige Eskalation.
+    temperatur = _extract_first_number(answers.get("korpertemperatur", ""))
+    if temperatur is not None and temperatur >= 39:
+        severity = "critical" if temperatur >= 40 else "warning"
         flags.append(RedFlag(
             rule_id="COUGH-RF-003",
-            description="Fieber oder Schüttelfrost bei akutem Husten: Infektiöses Geschehen, Pneumonie nicht auszuschließen.",
+            description="Hohes gemessenes Fieber: zeitnahe ärztliche Sichtung erforderlich.",
             severity=severity,
-            triggered_by="fieber=ja",
+            triggered_by=f"korpertemperatur={temperatur}",
+        ))
+
+    if _parse_ja_nein(answers.get("fieber", "")) and (
+        _parse_ja_nein(answers.get("dyspnoe", ""))
+        or _parse_ja_nein(answers.get("thorakale_schmerzen", ""))
+        or _parse_ja_nein(answers.get("reduzierter_allgemeinzustand", ""))
+    ):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-010",
+            description="Fieber zusammen mit weiteren auffälligen Beschwerden: sofortige ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by="fieber=ja+weitere_warnzeichen",
         ))
 
     if _parse_ja_nein(answers.get("thorakale_schmerzen", "")):
         flags.append(RedFlag(
             rule_id="COUGH-RF-004",
-            description="Thorakale Schmerzen bei akutem Husten: Pleuritis oder kardiopulmonale Ursache nicht auszuschließen.",
+            description="Schmerzen oder Druck in der Brust bei akutem Husten: ärztliche Sichtung erforderlich.",
             severity="warning",
             triggered_by="thorakale_schmerzen=ja",
         ))
 
     vorerkrankungen = answers.get("vorerkrankungen", "").lower()
-    relevante = ("copd", "asthma", "herzinsuffizienz", "immunsuppression", "immunschwaeche", "krebs", "tumor", "transplant")
-    if any(kw in vorerkrankungen for kw in relevante):
-        severity = "critical" if _parse_ja_nein(answers.get("fieber", "")) else "warning"
+    relevante = (
+        "copd", "asthma", "herzinsuffizienz", "herzschwäche", "immunsuppression",
+        "immunschwaeche", "immunschwäche", "krebs", "tumor", "transplant",
+    )
+    relevante_vorerkrankung = (
+        any(kw in vorerkrankungen for kw in relevante)
+        or _parse_ja_nein(answers.get("chronische_lungenerkrankung", ""))
+        or _parse_ja_nein(answers.get("herzschwaeche", ""))
+        or _parse_ja_nein(answers.get("immunschwaeche", ""))
+    )
+    if relevante_vorerkrankung:
+        schwere_immunschwaeche = (
+            _parse_ja_nein(answers.get("immunschwaeche", ""))
+            or any(kw in vorerkrankungen for kw in ("immunsuppression", "immunschwaeche", "immunschwäche", "transplant"))
+        )
+        severity = "critical" if (
+            _parse_ja_nein(answers.get("fieber", "")) or schwere_immunschwaeche
+        ) else "warning"
         flags.append(RedFlag(
             rule_id="COUGH-RF-005",
-            description="Relevante Vorerkrankung bei akutem Husten: Erhöhtes Komplikationsrisiko, ärztliche Prüfung erforderlich.",
+            description="Relevante Vorerkrankung bei akutem Husten: erhöhtes Risiko, ärztliche Sichtung erforderlich.",
             severity=severity,
-            triggered_by=f"vorerkrankungen={answers.get('vorerkrankungen', '')}",
+            triggered_by="relevante_vorerkrankung=ja",
         ))
 
     if _parse_ja_nein(answers.get("belastungsdyspnoe", "")) and not _parse_ja_nein(answers.get("dyspnoe", "")):
         flags.append(RedFlag(
             rule_id="COUGH-RF-006",
-            description="Belastungsdyspnoe bei akutem Husten: Respiratorische Einschränkung möglich.",
+            description="Ungewöhnliche Kurzatmigkeit bei kleiner Anstrengung: ärztliche Sichtung erforderlich.",
             severity="warning",
             triggered_by="belastungsdyspnoe=ja",
         ))
@@ -508,14 +536,14 @@ def check_cough(answers: dict[str, str], vitals: dict[str, int | float] | None =
     if spo2 is not None and spo2 < 92:
         flags.append(RedFlag(
             rule_id="COUGH-RF-007",
-            description="SpO2 < 92%: Relevante Hypoxaemie, sofortige ärztliche Übernahme erforderlich.",
+            description="Sauerstoffsättigung unter 92 %: sofortige ärztliche Sichtung erforderlich.",
             severity="critical",
             triggered_by=f"spo2={spo2}",
         ))
     elif spo2 is not None and spo2 < 95:
         flags.append(RedFlag(
             rule_id="COUGH-RF-008",
-            description="SpO2 zwischen 92-94%: Leichte Hypoxaemie, ärztliche Prüfung empfohlen.",
+            description="Sauerstoffsättigung zwischen 92 und 94 %: ärztliche Sichtung erforderlich.",
             severity="warning",
             triggered_by=f"spo2={spo2}",
         ))
@@ -525,10 +553,66 @@ def check_cough(answers: dict[str, str], vitals: dict[str, int | float] | None =
         if not _parse_ja_nein(answers.get("blutbeimengung", "")):
             flags.append(RedFlag(
                 rule_id="COUGH-RF-009",
-                description="Blutiger oder rostfarbener Auswurf: Hämoptysen möglich, ärztliche Abklärung erforderlich.",
+                description="Blutiger oder rostfarbener Schleim: sofortige ärztliche Sichtung erforderlich.",
                 severity="critical",
                 triggered_by=f"auswurf_farbe={answers.get('auswurf_farbe', '')}",
             ))
+
+    critical_yes_no_rules = (
+        ("ruhedyspnoe", "COUGH-RF-011", "Atemnot in Ruhe"),
+        ("sprechen_beeintraechtigt", "COUGH-RF-012", "Atemnot beim Sprechen"),
+        ("zyanose", "COUGH-RF-013", "Bläuliche Verfärbung von Lippen oder Gesicht"),
+        ("verwirrtheit", "COUGH-RF-014", "Plötzliche Verwirrtheit"),
+        ("ohnmacht", "COUGH-RF-015", "Ohnmacht oder Beinahe-Zusammenbruch"),
+        ("auffaelliges_atemgeraeusch", "COUGH-RF-016", "Neues auffälliges Atemgeräusch"),
+        ("rauch_reizstoffe", "COUGH-RF-017", "Einatmen von Rauch oder reizenden Stoffen"),
+        ("rasche_verschlechterung", "COUGH-RF-018", "Rasche deutliche Verschlechterung"),
+    )
+    for key, rule_id, label in critical_yes_no_rules:
+        if _parse_ja_nein(answers.get(key, "")):
+            flags.append(RedFlag(
+                rule_id=rule_id,
+                description=f"{label}: sofortige ärztliche Sichtung erforderlich.",
+                severity="critical",
+                triggered_by=f"{key}=ja",
+            ))
+
+    if _parse_ja_nein(answers.get("reduzierter_allgemeinzustand", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-019",
+            description="Sehr schlechter Allgemeinzustand: ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by="reduzierter_allgemeinzustand=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("brustverletzung", "")):
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-020",
+            description="Kürzliche Verletzung des Brustkorbs bei Husten: ärztliche Sichtung erforderlich.",
+            severity="warning",
+            triggered_by="brustverletzung=ja",
+        ))
+
+    atemfrequenz = _extract_first_number(answers.get("atemfrequenz", ""))
+    if atemfrequenz is None and vitals:
+        atemfrequenz = vitals.get("atemfrequenz")
+    # >= 30/min entspricht dem Atemfrequenz-Kriterium der CRB-65-Erhebung.
+    if atemfrequenz is not None and atemfrequenz >= 30:
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-021",
+            description="Mindestens 30 Atemzüge pro Minute: sofortige ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by=f"atemfrequenz={atemfrequenz}",
+        ))
+
+    puls = vitals.get("puls") if vitals else None
+    if puls is not None and puls >= 120:
+        flags.append(RedFlag(
+            rule_id="COUGH-RF-022",
+            description="Sehr schneller Puls: sofortige ärztliche Sichtung erforderlich.",
+            severity="critical",
+            triggered_by=f"puls={puls}",
+        ))
 
     return flags
 

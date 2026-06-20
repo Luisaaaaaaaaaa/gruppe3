@@ -127,6 +127,26 @@ class TestRedFlagEscalation:
         all_text = " ".join(messages)
         assert "ESKALATION" in all_text or "sofortige" in all_text.lower()
 
+    def test_cough_warning_interrupts_dialogue_immediately(self) -> None:
+        messages: list[str] = []
+        callbacks: list = []
+        controller = DialogueController(
+            scenario_key="A",
+            patient=_make_patient(),
+            display_message=messages.append,
+            request_input=callbacks.append,
+        )
+
+        controller.start()
+        callbacks.pop()("ja")
+        callbacks.pop()("seit 2 Tagen")
+        callbacks.pop()("ja")
+
+        assert controller.state == DialogueState.END
+        assert controller.summary is not None
+        assert controller.summary.escalation_required is True
+        assert "Bitte sofort dem Praxisteam melden" in " ".join(messages)
+
 
 class TestAbortByPatient:
     """Fall 3: Patient bricht waehrend der Anamnese ab."""
