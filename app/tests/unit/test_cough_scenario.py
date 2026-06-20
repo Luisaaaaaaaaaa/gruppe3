@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from app.dialogue.dialogue_controller import DialogueController
 from app.patient_import.patient_schema import PatientRecord
 
@@ -60,11 +58,7 @@ def test_routine_cough_does_not_simulate_unrelated_vitals() -> None:
     assert controller._vitals_source == "nicht erhoben"
 
 
-@patch(
-    "app.dialogue.dialogue_controller.Simulator.pulsoximeter",
-    return_value={"spo2": 97, "puls": 78},
-)
-def test_pulse_oximeter_is_used_only_when_indicated(mock_pulse_ox) -> None:
+def test_indication_does_not_silently_start_pulse_oximeter() -> None:
     controller = _controller()
     controller._answers = {
         "belastungsdyspnoe": "ja",
@@ -73,6 +67,21 @@ def test_pulse_oximeter_is_used_only_when_indicated(mock_pulse_ox) -> None:
 
     controller._measure_cough_vitals()
 
-    mock_pulse_ox.assert_called_once()
+    assert controller._vitals == {"temperatur": 38.2}
+    assert controller._vital_sources == {"temperatur": "manuell eingegeben"}
+
+
+def test_explicit_simulator_values_keep_per_value_sources() -> None:
+    controller = _controller()
+    controller._answers = {"korpertemperatur": "38,2 °C"}
+    controller.record_vitals({"spo2": 97, "puls": 78}, "simuliert")
+
+    controller._measure_cough_vitals()
+
     assert controller._vitals == {"temperatur": 38.2, "spo2": 97, "puls": 78}
-    assert controller._vitals_source == "Patientenangabe und Pulsoximeter-Simulator"
+    assert controller._vital_sources == {
+        "spo2": "simuliert",
+        "puls": "simuliert",
+        "temperatur": "manuell eingegeben",
+    }
+    assert controller._vitals_source == "simuliert, manuell eingegeben"

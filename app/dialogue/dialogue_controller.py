@@ -11,7 +11,6 @@ from app.dialogue.consent_flow import (
     is_consent_given,
 )
 from app.dialogue.state_machine import DialogueState, StateMachine
-from app.devices.simulators import Simulator
 from app.logger.audit_logger import (
     log_answer,
     log_escalation,
@@ -98,6 +97,7 @@ class DialogueController:
         self._state_machine = StateMachine()
         self._answers: dict[str, str] = {}
         self._vitals: dict[str, int | float] = {}
+        self._vital_sources: dict[str, str] = {}
         self._vitals_source = "nicht erhoben"
         self._red_flags: list[RedFlag] = []
         self._summary: AnamnesisSummary | None = None
@@ -513,7 +513,13 @@ class DialogueController:
 
         self._ask_next_question()
 
-    def submit_mass_anamnesis(self, answers: dict[str, str]) -> None:
+    def submit_mass_anamnesis(
+        self,
+        answers: dict[str, str],
+        vital_sources: dict[str, str] | None = None,
+    ) -> None:
+        if vital_sources is not None:
+            self._vital_sources = dict(vital_sources)
         for q in self._questions:
             value = answers.get(q.key, "").strip()
             if q.required and self.is_question_visible(q.key, answers) and not value:
@@ -553,104 +559,66 @@ class DialogueController:
         )
 
         if bp_known:
-            self._vitals = {
+            self._vitals.update({
                 "systolisch": float(sys_str.replace(",", ".")),
                 "diastolisch": float(dia_str.replace(",", ".")),
-            }
-            self._vitals_source = "Patientenangabe"
+            })
+            self._vital_sources.setdefault("systolisch", "manuell eingegeben")
+            self._vital_sources.setdefault("diastolisch", "manuell eingegeben")
             self._display(
                 f"Blutdruck aus Anamnese übernommen: "
                 f"{self._vitals['systolisch']}/{self._vitals['diastolisch']} mmHg"
             )
-        else:
-            simulator = Simulator(geschlecht="weiblich", groesse_cm=167, alter=38)
-            bp = simulator.blutdruck()
-            self._vitals = {
-                "systolisch": bp["systolisch"],
-                "diastolisch": bp["diastolisch"],
-            }
-            self._vitals_source = "simuliert"
-            log_info(
-                f"Vitalparameter simuliert: {bp['systolisch']}/{bp['diastolisch']} mmHg"
-            )
-            self._display(
-                f"Simulierter Blutdruck: {bp['systolisch']}/{bp['diastolisch']} mmHg "
-                f"[Quelle: Gerätesimulator]"
-            )
-
         if puls_str.lower() not in ("", "unbekannt"):
             self._vitals["puls"] = float(puls_str.replace(",", "."))
+            self._vital_sources.setdefault("puls", "manuell eingegeben")
 
         gewicht_key = "gewicht_aktuell" if self._scenario_id == "diabetes" else "gewicht"
         gewicht_str = (self._answers.get(gewicht_key) or "").strip()
         if gewicht_str.lower() not in ("", "unbekannt"):
             self._vitals["gewicht"] = float(gewicht_str.replace(",", "."))
-        else:
-            sim = Simulator(
-                geschlecht=self._patient.details.gender,
-                groesse_cm=self._patient.details.groesse_cm,
-                alter=_calculate_age(self._patient.date_of_birth),
-            )
-            sim_gewicht = sim.gewicht()
-            self._vitals["gewicht"] = sim_gewicht["gewicht"]
-            log_info(
-                f"Gewicht simuliert: {sim_gewicht['gewicht']} kg "
-                f"(BMI: {sim_gewicht['bmi']}, {sim_gewicht['klasse']})"
-            )
-            self._display(
-                f"Simuliertes Gewicht: {sim_gewicht['gewicht']} kg "
-                f"(BMI: {sim_gewicht['bmi']}, {sim_gewicht['klasse']})"
-            )
+            self._vital_sources.setdefault("gewicht", "manuell eingegeben")
+
+        self._refresh_vitals_source()
 
         self._state_machine.advance()
         self._handle_state()
 
     def _measure_cough_vitals(self) -> None:
-        self._vitals = {}
-        patient_values = False
+        # Bereits bewusst über die UI übernommene Geräte-/Simulatorwerte bleiben
+        # erhalten. Die Anamnese ergänzt nur manuell angegebene Werte.
 
         temperatur = _extract_number(self._answers.get("korpertemperatur", ""))
         if temperatur is not None:
             self._vitals["temperatur"] = temperatur
-            patient_values = True
+            self._vital_sources.setdefault("temperatur", "manuell eingegeben")
 
         atemfrequenz = _extract_number(self._answers.get("atemfrequenz", ""))
         if atemfrequenz is not None:
             self._vitals["atemfrequenz"] = atemfrequenz
-            patient_values = True
+            self._vital_sources.setdefault("atemfrequenz", "manuell eingegeben")
 
-        pulse_ox_needed = any(
-            _is_yes(self._answers.get(key, ""))
-            for key in (
-                "dyspnoe",
-                "belastungsdyspnoe",
-                "reduzierter_allgemeinzustand",
-                "thorakale_schmerzen",
-                "chronische_lungenerkrankung",
-            )
-        ) or (temperatur is not None and temperatur >= 39)
+        self._refresh_vitals_source()
 
-        if pulse_ox_needed:
-            simulator = Simulator(
-                geschlecht=self._patient.details.gender,
-                groesse_cm=self._patient.details.groesse_cm,
-                alter=_calculate_age(self._patient.date_of_birth),
-            )
-            pulse_ox = simulator.pulsoximeter()
-            self._vitals.update(pulse_ox)
-            self._vitals_source = (
-                "Patientenangabe und Pulsoximeter-Simulator"
-                if patient_values
-                else "Pulsoximeter-Simulator"
-            )
-            self._display(
-                f"Pulsoximeter simuliert: Sauerstoffsättigung {pulse_ox['spo2']} %, "
-                f"Puls {pulse_ox['puls']}/min [Quelle: Gerätesimulator]"
-            )
-        elif patient_values:
-            self._vitals_source = "Patientenangabe"
-        else:
+    def record_vitals(
+        self,
+        values: dict[str, int | float],
+        source: str,
+    ) -> None:
+        """Übernimmt Messwerte samt Herkunft, ohne die Zahlenstruktur zu verändern."""
+        self._vitals.update(values)
+        for key in values:
+            self._vital_sources[key] = source
+        self._refresh_vitals_source()
+
+    def _refresh_vitals_source(self) -> None:
+        sources = list(dict.fromkeys(self._vital_sources.values()))
+        if not sources:
             self._vitals_source = "nicht erhoben"
+        elif len(sources) == 1:
+            self._vitals_source = sources[0]
+        else:
+            self._vitals_source = ", ".join(sources)
 
     def _escalate_critical_acute_answers(self) -> bool:
         return self.check_partial_answers_for_escalation(self._answers, self._vitals)
@@ -837,7 +805,13 @@ class DialogueController:
             for q in self._questions
         ]
 
-    def update_answers_and_regenerate(self, answers: dict[str, str]) -> None:
+    def update_answers_and_regenerate(
+        self,
+        answers: dict[str, str],
+        vital_sources: dict[str, str] | None = None,
+    ) -> None:
+        if vital_sources is not None:
+            self._vital_sources.update(vital_sources)
         for q in self._questions:
             value = answers.get(q.key, "").strip()
             if q.required and not value:
@@ -866,6 +840,7 @@ class DialogueController:
             answers=self._answers,
             vitals=self._vitals,
             vitals_source=self._vitals_source,
+            vital_sources=self._vital_sources,
             red_flags=self._red_flags,
         )
 
@@ -884,10 +859,6 @@ def _is_number_or_unknown(value: str) -> bool:
         return True
     except ValueError:
         return False
-
-
-def _is_yes(value: str) -> bool:
-    return value.strip().lower() in ("ja", "j", "yes", "y")
 
 
 def _extract_number(value: str) -> float | None:

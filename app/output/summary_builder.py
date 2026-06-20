@@ -16,6 +16,7 @@ class AnamnesisSummary:
     answers: dict[str, str] = field(default_factory=dict)
     vitals: dict[str, int | float] = field(default_factory=dict)
     vitals_source: str = "simuliert"
+    vital_sources: dict[str, str] = field(default_factory=dict)
     red_flags: list[RedFlag] = field(default_factory=list)
     escalation_required: bool = False
     open_points: list[str] = field(default_factory=list)
@@ -29,6 +30,7 @@ def build_summary(
     answers: dict[str, str],
     vitals: dict | None = None,
     vitals_source: str = "simuliert",
+    vital_sources: dict[str, str] | None = None,
     red_flags: list[RedFlag] | None = None,
 ) -> AnamnesisSummary:
     if red_flags is None:
@@ -36,6 +38,10 @@ def build_summary(
 
     if vitals is None:
         vitals = {}
+    if vital_sources is None:
+        vital_sources = {
+            key: vitals_source for key in vitals
+        }
 
     escalation_required = any(rf.severity == "critical" for rf in red_flags)
 
@@ -65,6 +71,7 @@ def build_summary(
         answers=answers,
         vitals=vitals,
         vitals_source=vitals_source,
+        vital_sources=vital_sources,
         red_flags=red_flags,
         escalation_required=escalation_required,
         open_points=open_points,

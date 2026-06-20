@@ -3,7 +3,7 @@ import zlib
 import base64
 
 from app.medical_rules.red_flag_engine import RedFlag
-from app.output.export_pdf import export_summary_pdf
+from app.output.export_pdf import build_preview_html, export_summary_pdf
 from app.output.summary_builder import AnamnesisSummary
 from app.patient_import.patient_schema import PatientRecord
 
@@ -75,3 +75,23 @@ def test_export_summary_pdf_returns_pdf_bytes_with_key_content() -> None:
     assert "Erika Mustermann" in pdf_text
     assert "P-4711" in pdf_text
     assert "KRITISCH" in pdf_text
+
+
+def test_preview_documents_source_for_each_vital() -> None:
+    patient = PatientRecord(patient_id="P-1", first_name="Test", last_name="Person")
+    summary = AnamnesisSummary(
+        patient_id="P-1",
+        patient_name="Test Person",
+        scenario="C",
+        timestamp="2026-06-20T12:00:00",
+        vitals={"systolisch": 145, "gewicht": 78},
+        vital_sources={
+            "systolisch": "simuliert",
+            "gewicht": "manuell eingegeben",
+        },
+    )
+
+    html = build_preview_html(summary, patient)
+
+    assert "145 (Quelle: simuliert)" in html
+    assert "78 (Quelle: manuell eingegeben)" in html

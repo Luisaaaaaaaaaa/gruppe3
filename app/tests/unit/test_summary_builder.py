@@ -39,7 +39,29 @@ class TestBuildSummary:
         assert summary.patient_name == "Test Patient"
         assert summary.scenario == "A"
         assert summary.vitals_source == "simuliert"
+        assert summary.vital_sources == {
+            "systolisch": "simuliert",
+            "diastolisch": "simuliert",
+        }
         assert summary.synthetic is True
+
+    def test_mixed_vital_sources_are_preserved_per_value(self) -> None:
+        summary = build_summary(
+            patient=_make_patient(),
+            scenario="C",
+            answers={},
+            vitals={"systolisch": 145, "diastolisch": 90, "gewicht": 78},
+            vitals_source="simuliert, manuell eingegeben",
+            vital_sources={
+                "systolisch": "simuliert",
+                "diastolisch": "simuliert",
+                "gewicht": "manuell eingegeben",
+            },
+            red_flags=[],
+        )
+
+        assert summary.vital_sources["systolisch"] == "simuliert"
+        assert summary.vital_sources["gewicht"] == "manuell eingegeben"
 
     def test_escalation_required_when_critical_flag(self) -> None:
         patient = _make_patient()

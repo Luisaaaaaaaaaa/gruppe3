@@ -33,10 +33,7 @@ def build_preview_html(
     else:
         html_parts.append(_html_section("Anamnese-Antworten", list(summary.answers.items())))
 
-    vitals_rows = [("Quelle", summary.vitals_source or "simuliert")]
-    vitals_rows.extend(
-        (key, str(value)) for key, value in summary.vitals.items()
-    )
+    vitals_rows = _vital_rows(summary)
     html_parts.append(_html_section("Vitalparameter", vitals_rows))
 
     if summary.red_flags:
@@ -93,6 +90,16 @@ def _html_section(title: str, rows: list[tuple[str, str]]) -> str:
 
 def _html_section_raw(title: str, html: str) -> str:
     return f"<h2>{title}</h2>{html}"
+
+
+def _vital_rows(summary: AnamnesisSummary) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for key, value in summary.vitals.items():
+        source = summary.vital_sources.get(key, summary.vitals_source or "nicht dokumentiert")
+        rows.append((key, f"{value} (Quelle: {source})"))
+    if not rows:
+        rows.append(("Status", "nicht erhoben"))
+    return rows
 
 
 def export_summary_pdf(
@@ -214,10 +221,7 @@ def export_summary_pdf(
             value_style,
         )
 
-    vitals_rows = [("Quelle", summary.vitals_source or "simuliert")]
-    vitals_rows.extend(
-        (key, str(value)) for key, value in summary.vitals.items()
-    )
+    vitals_rows = _vital_rows(summary)
     _add_section(elements, "Vitalparameter", vitals_rows, label_style, value_style)
 
     if summary.red_flags:
