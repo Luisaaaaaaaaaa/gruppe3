@@ -315,6 +315,12 @@ class DialogueController:
             if rf.lower().startswith("familien"):
                 continue
 
+            # Im Diabetes-Szenario werden Rauchen und Alkohol bereits als
+            # feste, verständliche Fragen mit passenden Folgefragen erhoben.
+            # Aktenbasierte Risikofragen würden diese Angaben verdoppeln.
+            if self._scenario_id == "diabetes" and rf.lower().startswith(("rauchen", "alkohol")):
+                continue
+
             text = _risikofaktor_frage(rf)
             if text is None:
                 continue
@@ -575,7 +581,8 @@ class DialogueController:
         if puls_str.lower() not in ("", "unbekannt"):
             self._vitals["puls"] = float(puls_str.replace(",", "."))
 
-        gewicht_str = (self._answers.get("gewicht") or "").strip()
+        gewicht_key = "gewicht_aktuell" if self._scenario_id == "diabetes" else "gewicht"
+        gewicht_str = (self._answers.get(gewicht_key) or "").strip()
         if gewicht_str.lower() not in ("", "unbekannt"):
             self._vitals["gewicht"] = float(gewicht_str.replace(",", "."))
         else:

@@ -2175,7 +2175,7 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> None:
 
 
 def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueController) -> None:
-    weight_field = fields.get("gewicht")
+    weight_field = fields.get("gewicht") or fields.get("gewicht_aktuell")
     if not isinstance(weight_field, _SliderField):
         return
     patient = controller.get_patient()

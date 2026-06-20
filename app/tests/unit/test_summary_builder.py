@@ -307,3 +307,16 @@ class TestBuildGroupedSections:
         sections = build_grouped_sections("D", answers, vitals)
         assert "140" in sections["Verlauf"]["Blutdruck"]
         assert "90" in sections["Verlauf"]["Blutdruck"]
+
+    def test_diabetes_uses_simulated_weight_and_control_dates(self) -> None:
+        answers = {
+            "gewicht_aktuell": "unbekannt",
+            "letzte_augenkontrolle": "vor einem Jahr",
+            "letzte_fusskontrolle": "vor sechs Monaten",
+            "letzte_nierenkontrolle": "heute",
+        }
+        sections = build_grouped_sections("diabetes", answers, {"gewicht": 82.5})
+        assert sections["Verlauf"]["Aktuelles Gewicht"] == "82.5 kg"
+        assert sections["Vorbefunde"]["Letzte Augenkontrolle"] == "vor einem Jahr"
+        assert sections["Vorbefunde"]["Letzte Fußkontrolle"] == "vor sechs Monaten"
+        assert sections["Vorbefunde"]["Letzte Nierenkontrolle"] == "heute"

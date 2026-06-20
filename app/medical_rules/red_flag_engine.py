@@ -379,7 +379,41 @@ def check_diabetes(
             triggered_by="hypo_hyper_hinweise=ja",
         ))
 
-    if any(keyword in symptom_text for keyword in ("bewusst", "verwirrt", "verwirrtheit", "ohnmacht")):
+    if _parse_ja_nein(answers.get("akut_verwirrt_bewusstlos", "")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-002",
+            description="Verwirrtheit, Ohnmacht oder Bewusstlosigkeit bei Diabetes: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by="akut_verwirrt_bewusstlos=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("akutes_erbrechen_atmung", "")) or _parse_ja_nein(answers.get("atemnot", "")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-003",
+            description="Erbrechen, starke Bauchschmerzen oder auffällige Atmung bei Diabetes: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by="akutes_erbrechen_atmung/atemnot=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("brustschmerz", "")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-004",
+            description="Brustschmerz oder starker Druck in der Brust: Sofortige ärztliche Übernahme erforderlich.",
+            severity="critical",
+            triggered_by="brustschmerz=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("sehstoerungen", "")):
+        flags.append(RedFlag(
+            rule_id="DM-RF-005",
+            description="Plötzliche Sehverschlechterung bei Diabetes: Ärztliche Prüfung erforderlich.",
+            severity="warning",
+            triggered_by="sehstoerungen=ja",
+        ))
+
+    if not _parse_ja_nein(answers.get("akut_verwirrt_bewusstlos", "")) and any(
+        keyword in symptom_text for keyword in ("bewusst", "verwirrt", "verwirrtheit", "ohnmacht")
+    ):
         flags.append(RedFlag(
             rule_id="DM-RF-002",
             description="Bewusstseinsstörung oder Verwirrtheit bei Diabetes: Schwere Stoffwechselentgleisung nicht auszuschließen.",
@@ -387,7 +421,10 @@ def check_diabetes(
             triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
         ))
 
-    if any(keyword in symptom_text for keyword in ("erbrechen", "atemnot", "luftnot", "dehyd")):
+    if not (
+        _parse_ja_nein(answers.get("akutes_erbrechen_atmung", ""))
+        or _parse_ja_nein(answers.get("atemnot", ""))
+    ) and any(keyword in symptom_text for keyword in ("erbrechen", "atemnot", "luftnot", "dehyd")):
         flags.append(RedFlag(
             rule_id="DM-RF-003",
             description="Erbrechen, Atemnot oder Dehydratation bei Diabetes: Akute Stoffwechselentgleisung nicht auszuschließen.",
@@ -395,7 +432,9 @@ def check_diabetes(
             triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
         ))
 
-    if any(keyword in symptom_text for keyword in ("brustschmerz", "druck auf der brust", "druckgefuehl")):
+    if not _parse_ja_nein(answers.get("brustschmerz", "")) and any(
+        keyword in symptom_text for keyword in ("brustschmerz", "druck auf der brust", "druckgefuehl")
+    ):
         flags.append(RedFlag(
             rule_id="DM-RF-004",
             description="Brustschmerz im Diabetes-Szenario: Sofortige ärztliche Abklärung erforderlich.",
@@ -403,7 +442,9 @@ def check_diabetes(
             triggered_by=f"hypo_hyper_beschwerden={answers.get('hypo_hyper_beschwerden', '')}",
         ))
 
-    if any(keyword in symptom_text for keyword in ("sehstoer", "verschwommen")):
+    if not _parse_ja_nein(answers.get("sehstoerungen", "")) and any(
+        keyword in symptom_text for keyword in ("sehstoer", "verschwommen")
+    ):
         flags.append(RedFlag(
             rule_id="DM-RF-005",
             description="Sehstörungen bei Diabetes: Ärztliche Prüfung empfohlen.",

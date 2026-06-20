@@ -340,6 +340,8 @@ def build_grouped_sections(
         gewicht = answers.get("gewicht_aktuell", "").strip()
         if gewicht and gewicht.lower() != "unbekannt":
             verlauf["Aktuelles Gewicht"] = f"{gewicht} kg"
+        elif "gewicht" in vitals:
+            verlauf["Aktuelles Gewicht"] = f"{vitals['gewicht']} kg"
         else:
             verlauf["Aktuelles Gewicht"] = "keine Angabe"
 
@@ -369,14 +371,31 @@ def build_grouped_sections(
 
         verlauf["Blutdruck"] = f"{sys_str}/{dia_str} mmHg"
 
+        heimwerte = answers.get("blutdruck_zu_hause_details", "").strip()
+        if heimwerte:
+            verlauf["Blutdruckwerte zu Hause"] = heimwerte
+
         verlauf["Letzte Diabetes-Kontrolle"] = answers.get("letzte_kontrolle", "")
 
         sections["Verlauf"] = verlauf
 
         symptome: dict[str, str] = {}
-        hypo_val = answers.get("hypo_hyper_hinweise", "")
-        if hypo_val:
-            symptome["Hinweise auf Hypo-/Hyperglykaemie"] = hypo_val
+        symptom_fields = {
+            "Allgemeinbefinden": "allgemeinbefinden",
+            "Ungewöhnlich starker Durst": "starker_durst",
+            "Häufigeres Wasserlassen": "haeufiges_wasserlassen",
+            "Müdigkeit, Schwäche oder Benommenheit": "muedigkeit_schwaeche",
+            "Zittern, Schwitzen, Herzklopfen, Hunger oder Schwindel": "hypo_hyper_hinweise",
+            "Erbrechen, Bauchschmerz oder auffällige Atmung": "akutes_erbrechen_atmung",
+            "Verwirrtheit, Ohnmacht oder Bewusstlosigkeit": "akut_verwirrt_bewusstlos",
+            "Brustschmerz oder Druck in der Brust": "brustschmerz",
+            "Atemnot": "atemnot",
+            "Plötzliche Sehverschlechterung": "sehstoerungen",
+        }
+        for label, key in symptom_fields.items():
+            value = answers.get(key, "")
+            if value:
+                symptome[label] = value
         hypo_details = answers.get("hypo_hyper_beschwerden", "")
         if hypo_details:
             symptome["Beschwerden"] = hypo_details
@@ -392,6 +411,11 @@ def build_grouped_sections(
         diag_value = answers.get("bekannte_diagnosen", "")
         if diag_value:
             medikation["Bekannte Diagnosen"] = diag_value
+        for key, value in answers.items():
+            if key.startswith("med_adhaerenz_grund_") and value:
+                medikation[f"Grund für abweichende Einnahme ({key.removeprefix('med_adhaerenz_grund_')})"] = value
+            elif key.startswith("med_adhaerenz_") and value:
+                medikation[f"Einnahme wie vereinbart ({key.removeprefix('med_adhaerenz_')})"] = value
         sections["Medikation"] = medikation
 
         komplikationen: dict[str, str] = {}
@@ -407,6 +431,8 @@ def build_grouped_sections(
         fuss_details = answers.get("offene_wunde_fussproblem_details", "")
         if fuss_details:
             komplikationen["Fussproblem-Details"] = fuss_details
+        if answers.get("gefuehlsstoerungen_fuesse", ""):
+            komplikationen["Kribbeln, Brennen, Schmerzen oder Taubheit"] = answers["gefuehlsstoerungen_fuesse"]
         sections["Komplikationen"] = komplikationen
 
         vorbefunde: dict[str, str] = {}
@@ -422,15 +448,31 @@ def build_grouped_sections(
         bz_w = answers.get("blutzuckerwert_details", "")
         if bz_w:
             vorbefunde["Blutzuckerwert"] = bz_w
+        for key, label in (
+            ("letzte_augenkontrolle", "Letzte Augenkontrolle"),
+            ("letzte_fusskontrolle", "Letzte Fußkontrolle"),
+            ("letzte_nierenkontrolle", "Letzte Nierenkontrolle"),
+        ):
+            if answers.get(key, ""):
+                vorbefunde[label] = answers[key]
         sections["Vorbefunde"] = vorbefunde
 
         offene_fragen: dict[str, str] = {}
         of = answers.get("offene_fragen", "")
         if of:
             offene_fragen["Patientenfragen"] = of
-        ls = answers.get("lebensstil", "")
-        if ls:
-            offene_fragen["Lebensstil"] = ls
+        for key, label in (
+            ("bewegung", "Bewegung"),
+            ("ernaehrung", "Ernährung"),
+            ("rauchen", "Rauchen"),
+            ("alkohol_konsum", "Alkoholkonsum"),
+            ("alkohol", "Alkohol"),
+            ("alltag_belastung", "Belastung durch Diabetes im Alltag"),
+            ("stimmung", "Stimmung"),
+            ("hilfebedarf", "Hilfebedarf"),
+        ):
+            if answers.get(key, ""):
+                offene_fragen[label] = answers[key]
         sections["Offene Fragen"] = offene_fragen
 
         if answers:

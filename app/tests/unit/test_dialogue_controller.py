@@ -26,7 +26,7 @@ def test_question_progress_counts_only_displayed_questions() -> None:
     current_question, total_questions = controller.question_progress
 
     assert current_question == 1
-    assert total_questions == 14
+    assert total_questions == 36
 
 
 @pytest.mark.parametrize(

@@ -702,6 +702,22 @@ class TestCheckDiabetes:
         flags = check_diabetes({})
         assert flags == []
 
+    def test_explicit_unconsciousness_answer_is_critical(self) -> None:
+        flags = check_diabetes({"akut_verwirrt_bewusstlos": "ja"})
+        assert any(f.rule_id == "DM-RF-002" and f.severity == "critical" for f in flags)
+
+    def test_explicit_vomiting_or_abnormal_breathing_is_critical(self) -> None:
+        flags = check_diabetes({"akutes_erbrechen_atmung": "ja"})
+        assert any(f.rule_id == "DM-RF-003" and f.severity == "critical" for f in flags)
+
+    def test_explicit_chest_pain_is_critical(self) -> None:
+        flags = check_diabetes({"brustschmerz": "ja"})
+        assert any(f.rule_id == "DM-RF-004" and f.severity == "critical" for f in flags)
+
+    def test_explicit_visual_change_is_warning(self) -> None:
+        flags = check_diabetes({"sehstoerungen": "ja"})
+        assert any(f.rule_id == "DM-RF-005" and f.severity == "warning" for f in flags)
+
 
 # ========================================================================
 # Dispatcher check()
