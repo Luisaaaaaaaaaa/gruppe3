@@ -308,6 +308,14 @@ class TestCheckHypertension:
         flags = check_hypertension(answers)
         assert not any(f.rule_id in ("HYP-RF-012", "HYP-RF-013") for f in flags)
 
+    def test_fainting_is_critical(self) -> None:
+        flags = check_hypertension({"ohnmacht": "ja"})
+        assert any(f.rule_id == "HYP-RF-014" and f.severity == "critical" for f in flags)
+
+    def test_palpitations_are_warning(self) -> None:
+        flags = check_hypertension({"herzklopfen": "ja"})
+        assert any(f.rule_id == "HYP-RF-015" and f.severity == "warning" for f in flags)
+
     def test_comma_number_parsing(self) -> None:
         answers = {"blutdruck_systolisch": "185,5"}
         flags = check_hypertension(answers)

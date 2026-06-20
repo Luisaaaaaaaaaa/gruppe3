@@ -41,6 +41,7 @@ from app.scenarios.hypertension_scenario import (
 
 MED_PREFIX = "med_adhaerenz_"
 MED_REASON_PREFIX = "med_adhaerenz_grund_"
+ADDITIONAL_MEDICATIONS_KEY = "weitere_medikamente"
 
 SCENARIO_MAP: dict[str, str] = {
     "A": "cough",
@@ -141,7 +142,7 @@ class DialogueController:
             questions.append(
                 AnamnesisQuestion(
                     key=f"{MED_PREFIX}{idx}",
-                    text=f"Nehmen Sie {med_text} regelmäßig/wie verschrieben ein?",
+                    text=f"Nehmen Sie {med_text} so ein, wie es Ihnen verschrieben wurde?",
                     input_type="ja_nein",
                 )
             )
@@ -153,6 +154,18 @@ class DialogueController:
                     required=False,
                 )
             )
+        questions.append(
+            AnamnesisQuestion(
+                key=ADDITIONAL_MEDICATIONS_KEY,
+                text=(
+                    "Nehmen Sie weitere Medikamente, die nicht in Ihrer Akte stehen? "
+                    "Denken Sie auch an frei gekaufte Mittel und Medikamente, die Sie "
+                    "nur gelegentlich oder wegen Ihrer aktuellen Beschwerden genommen "
+                    "haben. Bitte nennen Sie Name, Häufigkeit und Grund oder schreiben Sie 'keine'."
+                ),
+                input_type="freitext",
+            )
+        )
         return questions
 
     @property
@@ -244,7 +257,12 @@ class DialogueController:
             questions.append(
                 AnamnesisQuestion(
                     key="medikamente",
-                    text="Welche Medikamente nehmen Sie regelmäßig ein?",
+                    text=(
+                        "Welche Medikamente nehmen Sie? Denken Sie auch an frei gekaufte "
+                        "Mittel und Medikamente, die Sie nur gelegentlich oder wegen Ihrer "
+                        "aktuellen Beschwerden genommen haben. Bitte nennen Sie Name, "
+                        "Häufigkeit und Grund oder schreiben Sie 'keine'."
+                    ),
                     input_type="freitext",
                 )
             )
@@ -416,6 +434,25 @@ class DialogueController:
             return True
 
         if self._scenario_id == "hypertension":
+            bekannte_hypertonie = (answers.get("bluthochdruck_bekannt") or "").strip().lower()
+            kontroll_fragen = {
+                "letzte_kontrolle", "behandlung_geaendert",
+                "heimwerte_vorhanden", "heimwerte_verlauf",
+            }
+            erstauffaellig_fragen = {
+                "auffaelliger_wert_wann", "mehrfach_gemessen",
+                "fruehere_auffaellige_werte",
+            }
+            if question_key in kontroll_fragen:
+                if bekannte_hypertonie not in ("ja", "j", "yes", "y"):
+                    return False
+                if question_key == "heimwerte_verlauf":
+                    return (answers.get("heimwerte_vorhanden") or "").strip().lower() in (
+                        "ja", "j", "yes", "y",
+                    )
+                return True
+            if question_key in erstauffaellig_fragen:
+                return bekannte_hypertonie in ("nein", "n", "no")
             if question_key == "puls_messen":
                 antwort = (answers.get("puls") or "").strip().lower()
                 return antwort == "unbekannt"
@@ -609,8 +646,29 @@ class DialogueController:
             self._vitals_source = "nicht erhoben"
 
     def _escalate_critical_acute_answers(self) -> bool:
-        if self._scenario_id not in ("cough", "chest_pain"):
+        return self.check_partial_answers_for_escalation(self._answers, self._vitals)
+
+    def check_partial_answers_for_escalation(
+        self,
+        answers: dict[str, str],
+        vitals: dict[str, int | float] | None = None,
+    ) -> bool:
+        """Prüft unvollständige Eingaben und stoppt bei kritischen Warnzeichen.
+
+        Diese Methode wird sowohl vom schrittweisen Dialog als auch von der
+        Weboberfläche nach einzelnen Eingaben und Gerätemessungen verwendet.
+        Fehlende Pflichtangaben sind bei dieser Zwischenprüfung ausdrücklich
+        erlaubt.
+        """
+        if self.state != DialogueState.ANAMNESIS:
             return False
+
+        question_keys = {question.key for question in self._questions}
+        for key, value in answers.items():
+            if key in question_keys:
+                self._answers[key] = str(value).strip()
+        if vitals:
+            self._vitals.update(vitals)
 
         flags = check(
             scenario=self._scenario_id,

@@ -2204,6 +2204,7 @@ def _build_question_form(
     cancel_callback: Callable[[], None],
     live_visibility: bool = True,
     prefilled: dict[str, str] | None = None,
+    live_escalation_callback: Callable[[dict[str, str]], bool] | None = None,
 ) -> None:
     if controller is None:
         return
@@ -2213,6 +2214,26 @@ def _build_question_form(
     q_text_map: dict[str, str] = {q.key: q.text for q, _ in questions_with_answers}
     input_types: dict[str, str] = {q.key: q.input_type for q, _ in questions_with_answers}
     required_keys: set[str] = {q.key for q, _ in questions_with_answers if q.required}
+
+    def _collect_values() -> dict[str, str]:
+        result: dict[str, str] = {}
+        for key, field in fields.items():
+            if isinstance(field, _BloodPressureField):
+                result["blutdruck_systolisch"] = field.sys_value
+                result["blutdruck_diastolisch"] = field.dia_value
+            elif isinstance(field, _DummyField):
+                continue
+            else:
+                value = field.value
+                if value is None:
+                    value = ""
+                result[key] = str(value).strip()
+        return result
+
+    def _run_live_escalation() -> bool:
+        if live_escalation_callback is None:
+            return False
+        return live_escalation_callback(_collect_values())
 
     def _refresh_visibility() -> None:
         if not live_visibility:
@@ -2226,7 +2247,20 @@ def _build_question_form(
     def _make_radio_handler(key: str):
         def _handler(e) -> None:
             _refresh_visibility()
+            _run_live_escalation()
         return _handler
+
+    def _simulate_pulse_and_check() -> None:
+        _simulate_pulse(fields)
+        _run_live_escalation()
+
+    def _simulate_blood_pressure_and_check() -> None:
+        _simulate_blood_pressure(fields)
+        _run_live_escalation()
+
+    def _simulate_weight_and_check() -> None:
+        _simulate_weight_in_form(fields, controller)
+        _run_live_escalation()
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
@@ -2258,7 +2292,7 @@ def _build_question_form(
                         ).classes("text-[0.97rem] leading-7 text-slate-600")
                         ui.button(
                             "Messen (simulieren)",
-                            on_click=lambda: _simulate_pulse(fields),
+                            on_click=_simulate_pulse_and_check,
                         ).props("unelevated").classes(
                             "bg-[#0f766e] text-white w-fit"
                         )
@@ -2274,7 +2308,7 @@ def _build_question_form(
                         ).classes("text-[0.97rem] leading-7 text-slate-600")
                         ui.button(
                             "Wiegen (simulieren)",
-                            on_click=lambda c=controller: _simulate_weight_in_form(fields, c),
+                            on_click=_simulate_weight_and_check,
                         ).props("unelevated").classes(
                             "bg-[#0f766e] text-white w-fit"
                         )
@@ -2294,7 +2328,7 @@ def _build_question_form(
                         ).classes("text-[0.97rem] leading-7 text-slate-600")
                         ui.button(
                             "Messen (simulieren)",
-                            on_click=lambda: _simulate_blood_pressure(fields),
+                            on_click=_simulate_blood_pressure_and_check,
                         ).props("unelevated").classes(
                             "bg-[#0f766e] text-white w-fit"
                         )
@@ -2307,8 +2341,7 @@ def _build_question_form(
                     with ui.column().classes("w-full gap-3"):
                         ui.label(
                             "Wie hoch war Ihr letzter gemessener Blutdruck?\n"
-                            "Der obere Wert (systolisch) ist der höhere Druck beim Herzschlag,\n"
-                            "der untere Wert (diastolisch) ist der niedrigere Druck in der Ruhephase des Herzens."
+                            "Bitte tragen Sie den oberen und den unteren Wert ein."
                         ).classes(
                             "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
                         )
@@ -2316,26 +2349,28 @@ def _build_question_form(
                             sys_slider = ui.slider(
                                 min=80, max=250, step=1, value=120
                             ).classes("w-full")
-                            sys_label = ui.label("Systolisch (oberer Wert): 120").classes(
+                            sys_label = ui.label("Oberer Wert: 120").classes(
                                 "text-sm font-medium"
                             )
                             sys_slider.on(
                                 "update:model-value",
-                                lambda e, lbl=sys_label: lbl.set_text(
-                                    f"Systolisch (oberer Wert): {int(float(e.args))}"
+                                lambda e, lbl=sys_label: (
+                                    lbl.set_text(f"Oberer Wert: {int(float(e.args))}"),
+                                    _run_live_escalation(),
                                 ),
                             )
                         with ui.column().classes("w-full gap-1"):
                             dia_slider = ui.slider(
                                 min=40, max=150, step=1, value=80
                             ).classes("w-full")
-                            dia_label = ui.label("Diastolisch (unterer Wert): 80").classes(
+                            dia_label = ui.label("Unterer Wert: 80").classes(
                                 "text-sm font-medium"
                             )
                             dia_slider.on(
                                 "update:model-value",
-                                lambda e, lbl=dia_label: lbl.set_text(
-                                    f"Diastolisch (unterer Wert): {int(float(e.args))}"
+                                lambda e, lbl=dia_label: (
+                                    lbl.set_text(f"Unterer Wert: {int(float(e.args))}"),
+                                    _run_live_escalation(),
                                 ),
                             )
                         unknown_checkbox = ui.checkbox("unbekannt")
@@ -2348,7 +2383,7 @@ def _build_question_form(
                         )
                         unknown_checkbox.on(
                             "update:model-value",
-                            lambda _: _refresh_visibility(),
+                            lambda _: (_refresh_visibility(), _run_live_escalation()),
                         )
                 fields[key] = _BloodPressureField(
                     sys_slider, sys_label, dia_slider, dia_label, unknown_checkbox
@@ -2406,8 +2441,9 @@ def _build_question_form(
                             )
                             slider.on(
                                 "update:model-value",
-                                lambda e, lbl=value_label: lbl.set_text(
-                                    f"Wert: {int(float(e.args))}"
+                                lambda e, lbl=value_label: (
+                                    lbl.set_text(f"Wert: {int(float(e.args))}"),
+                                    _run_live_escalation(),
                                 ),
                             )
 
@@ -2420,7 +2456,7 @@ def _build_question_form(
                             )
                             unknown_checkbox.on(
                                 "update:model-value",
-                                lambda _: _refresh_visibility(),
+                                lambda _: (_refresh_visibility(), _run_live_escalation()),
                             )
 
                         fields[key] = _SliderField(
@@ -2431,12 +2467,14 @@ def _build_question_form(
                             value=effective_answer,
                             placeholder="Zahl eingeben oder 'unbekannt'",
                         ).classes("w-full").props("outlined")
+                        inp.on("blur", lambda _: _run_live_escalation())
                         fields[key] = inp
                 else:
                     ta = ui.textarea(
                         value=effective_answer,
                         placeholder="Ihre Antwort",
                     ).classes("w-full").props("outlined")
+                    ta.on("blur", lambda _: _run_live_escalation())
                     fields[key] = ta
 
         if live_visibility:
@@ -2449,21 +2487,6 @@ def _build_question_form(
                     containers[q.key].visible = controller.is_question_visible(
                         q.key, collected_now
                     )
-
-        def _collect_values() -> dict[str, str]:
-            result: dict[str, str] = {}
-            for key, field in fields.items():
-                if isinstance(field, _BloodPressureField):
-                    result["blutdruck_systolisch"] = field.sys_value
-                    result["blutdruck_diastolisch"] = field.dia_value
-                elif isinstance(field, _DummyField):
-                    continue
-                else:
-                    value = field.value
-                    if value is None:
-                        value = ""
-                    result[key] = str(value).strip()
-            return result
 
         def _collect_and_validate() -> list[str]:
             errors: list[str] = []
@@ -3009,6 +3032,33 @@ def _render_mass_anamnesis(
         _render_mass_anamnesis_single(session, refresh_ui)
 
 
+def _check_live_form_escalation(
+    session: BrowserSession,
+    controllers: list[DialogueController],
+    answers: dict[str, str],
+    refresh_ui: Callable[[], None],
+    vitals: dict[str, int | float] | None = None,
+) -> bool:
+    """Beendet das Formular unmittelbar bei einem kritischen Warnzeichen."""
+    for ctrl in controllers:
+        if not ctrl.check_partial_answers_for_escalation(answers, vitals):
+            continue
+
+        if session.controllers and ctrl in session.controllers:
+            session.controllers.remove(ctrl)
+            session.controllers.insert(0, ctrl)
+        session.prefilled_answers.update(answers)
+        ui.notify(
+            "Kritisches Warnzeichen erkannt. Bitte sofort das Praxisteam informieren.",
+            color="negative",
+            multi_line=True,
+            timeout=0,
+        )
+        refresh_ui()
+        return True
+    return False
+
+
 def _render_mass_anamnesis_single(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -3056,6 +3106,9 @@ def _render_mass_anamnesis_single(
         cancel_callback=_on_cancel,
         live_visibility=True,
         prefilled=session.prefilled_answers,
+        live_escalation_callback=lambda answers: _check_live_form_escalation(
+            session, [ctrl], answers, refresh_ui
+        ),
     )
 
 
@@ -3151,6 +3204,9 @@ def _render_mass_anamnesis_multi(
         cancel_callback=_on_cancel,
         live_visibility=True,
         prefilled=session.prefilled_answers,
+        live_escalation_callback=lambda answers: _check_live_form_escalation(
+            session, controllers, answers, refresh_ui
+        ),
     )
 
 
@@ -3323,6 +3379,18 @@ def _simulate_bp(session: BrowserSession, refresh_ui: Callable[[], None]) -> Non
         alter=_calculate_age(p.date_of_birth),
     )
     session.simulated_bp = sim.blutdruck()
+    controllers = session.controllers or ([session.controller] if session.controller else [])
+    if _check_live_form_escalation(
+        session,
+        controllers,
+        {},
+        refresh_ui,
+        {
+            "systolisch": session.simulated_bp["systolisch"],
+            "diastolisch": session.simulated_bp["diastolisch"],
+        },
+    ):
+        return
     refresh_ui()
 
 
@@ -3336,6 +3404,15 @@ def _simulate_weight(session: BrowserSession, refresh_ui: Callable[[], None]) ->
         alter=_calculate_age(p.date_of_birth),
     )
     session.simulated_weight = sim.gewicht()
+    controllers = session.controllers or ([session.controller] if session.controller else [])
+    if _check_live_form_escalation(
+        session,
+        controllers,
+        {},
+        refresh_ui,
+        {"gewicht": session.simulated_weight["gewicht"]},
+    ):
+        return
     refresh_ui()
 
 
@@ -3349,6 +3426,18 @@ def _simulate_oximeter(session: BrowserSession, refresh_ui: Callable[[], None]) 
         alter=_calculate_age(p.date_of_birth),
     )
     session.simulated_oximeter = sim.pulsoximeter()
+    controllers = session.controllers or ([session.controller] if session.controller else [])
+    if _check_live_form_escalation(
+        session,
+        controllers,
+        {},
+        refresh_ui,
+        {
+            "spo2": session.simulated_oximeter["spo2"],
+            "puls": session.simulated_oximeter["puls"],
+        },
+    ):
+        return
     refresh_ui()
 
 

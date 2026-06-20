@@ -139,6 +139,8 @@ def build_grouped_sections(
         medications = {}
         if answers.get("medikamente", "").strip():
             medications["Aktuelle Medikamente"] = answers["medikamente"]
+        if answers.get("weitere_medikamente", "").strip():
+            medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
         for key, value in answers.items():
             if key.startswith("med_adhaerenz_grund_"):
                 index = int(key.removeprefix("med_adhaerenz_grund_"))
@@ -226,6 +228,8 @@ def build_grouped_sections(
         medications: dict[str, str] = {}
         if answers.get("medikamente", "").strip():
             medications["Aktuelle Medikamente"] = answers["medikamente"]
+        if answers.get("weitere_medikamente", "").strip():
+            medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
         for key, value in answers.items():
             if key.startswith("med_adhaerenz_grund_"):
                 index = int(key.removeprefix("med_adhaerenz_grund_"))
@@ -255,6 +259,79 @@ def build_grouped_sections(
             "Messwerte",
             {vital_labels[key]: str(value) for key, value in vitals.items() if key in vital_labels},
         )
+        return sections
+
+    if scenario in ("C", "hypertension"):
+        def add_hypertension_section(title: str, fields: dict[str, str]) -> None:
+            non_empty = {key: value for key, value in fields.items() if value.strip()}
+            if non_empty:
+                sections[title] = non_empty
+
+        add_hypertension_section("Anlass und Verlauf", {
+            "Bluthochdruck bereits bekannt": answers.get("bluthochdruck_bekannt", ""),
+            "Letzte ärztliche Kontrolle": answers.get("letzte_kontrolle", ""),
+            "Behandlung seitdem verändert": answers.get("behandlung_geaendert", ""),
+            "Zu Hause in den letzten sieben Tagen gemessen": answers.get("heimwerte_vorhanden", ""),
+            "Verlauf der Werte zu Hause": answers.get("heimwerte_verlauf", ""),
+            "Zeit und Ort des erstmals auffälligen Werts": answers.get("auffaelliger_wert_wann", ""),
+            "Erneut gemessen": answers.get("mehrfach_gemessen", ""),
+            "Frühere auffällige Werte": answers.get("fruehere_auffaellige_werte", ""),
+        })
+
+        measurement_fields = {
+            "Messbedingungen": answers.get("messbedingungen", ""),
+        }
+        vital_labels = {
+            "systolisch": "Oberer Blutdruckwert",
+            "diastolisch": "Unterer Blutdruckwert",
+            "puls": "Puls pro Minute",
+            "gewicht": "Gewicht in kg",
+        }
+        for key, value in vitals.items():
+            if key in vital_labels:
+                measurement_fields[vital_labels[key]] = str(value)
+        add_hypertension_section("Messwerte", measurement_fields)
+
+        add_hypertension_section("Aktuelle Beschwerden und Warnzeichen", {
+            "Schmerzen oder Druck in der Brust": answers.get("brustschmerz", ""),
+            "Atemnot": answers.get("atemnot", ""),
+            "Lähmung, Taubheitsgefühl oder Sprachprobleme": answers.get("neurologische_symptome", ""),
+            "Plötzliche Sehprobleme": answers.get("sehstoerungen", ""),
+            "Ungewöhnlich starke Kopfschmerzen": answers.get("kopfschmerz", ""),
+            "Ohnmacht oder Beinahe-Zusammenbruch": answers.get("ohnmacht", ""),
+            "Starkes oder unregelmäßiges Herzklopfen": answers.get("herzklopfen", ""),
+        })
+
+        risks = {
+            "Weitere Vorerkrankungen": answers.get("vorerkrankungen", ""),
+            "Änderungen laut Patientenakte": answers.get("vorerkrankungen_aktuell", ""),
+            "Vorerkrankungen laut Patientenakte": answers.get("vorerkrankungen_liste", ""),
+            "Rauchen und Alkohol": answers.get("rauchen_alkohol", ""),
+            "Salz, Lakritz, Kaffee oder Energydrinks": answers.get("ernaehrung", ""),
+            "Regelmäßige Bewegung": answers.get("bewegung", ""),
+            "Starke Belastung oder Anspannung": answers.get("stress", ""),
+            "Schnarchen, Atempausen oder Tagesmüdigkeit": answers.get("schlaf", ""),
+        }
+        for key, value in answers.items():
+            if key.startswith("risikofaktor_"):
+                risks[f"Risikofaktor {key.removeprefix('risikofaktor_')}"] = value
+        add_hypertension_section("Vorerkrankungen und Lebensweise", risks)
+
+        medications: dict[str, str] = {}
+        if answers.get("medikamente", "").strip():
+            medications["Aktuelle Medikamente"] = answers["medikamente"]
+        if answers.get("weitere_medikamente", "").strip():
+            medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
+        for key, value in answers.items():
+            if key.startswith("med_adhaerenz_grund_"):
+                index = int(key.removeprefix("med_adhaerenz_grund_"))
+                name = patient_medications[index] if patient_medications and index < len(patient_medications) else f"Medikament {index + 1}"
+                medications[f"Grund für abweichende Einnahme von {name}"] = value
+            elif key.startswith("med_adhaerenz_"):
+                index = int(key.removeprefix("med_adhaerenz_"))
+                name = patient_medications[index] if patient_medications and index < len(patient_medications) else f"Medikament {index + 1}"
+                medications[f"{name} wie verordnet"] = value
+        add_hypertension_section("Medikamente", medications)
         return sections
 
     if scenario in ("D", "diabetes"):
@@ -309,6 +386,9 @@ def build_grouped_sections(
         med_value = answers.get("medikamente", "")
         if med_value:
             medikation["Aktuelle Medikamente"] = med_value
+        additional_med_value = answers.get("weitere_medikamente", "")
+        if additional_med_value:
+            medikation["Weitere oder gelegentlich eingenommene Medikamente"] = additional_med_value
         diag_value = answers.get("bekannte_diagnosen", "")
         if diag_value:
             medikation["Bekannte Diagnosen"] = diag_value

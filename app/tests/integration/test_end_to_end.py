@@ -44,18 +44,27 @@ class TestRoutineCaseNoRedFlag:
 
         # Alle Hypertonie-Fragen mit unkritischen Werten beantworten
         routine_answers = [
+            "ja",            # bluthochdruck_bekannt
+            "vor 6 Monaten", # letzte_kontrolle
+            "nein",          # behandlung_geaendert
+            "nein",          # heimwerte_vorhanden
             "130",           # systolisch
             "80",            # diastolisch
             "72",            # puls
             "Ruhend, sitzend",  # messbedingungen
-            "nein",          # kopfschmerz
             "nein",          # brustschmerz
             "nein",          # atemnot
             "nein",          # neurologische_symptome
             "nein",          # sehstoerungen
+            "nein",          # kopfschmerz
+            "nein",          # ohnmacht
+            "nein",          # herzklopfen
             "Keine",         # vorerkrankungen
-            "Wenig Sport",   # lebensstil
-            "nein",          # risikofaktoren
+            "nein",          # rauchen_alkohol
+            "nein",          # ernaehrung
+            "ja",            # bewegung
+            "nein",          # stress
+            "nein",          # schlaf
             "78",            # gewicht
             "ASS 100 mg",    # medikamente
         ]

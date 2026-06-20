@@ -14,6 +14,16 @@ def _make_patient() -> PatientRecord:
     )
 
 
+def _patient_with_medications(medications: list[str]) -> PatientRecord:
+    return PatientRecord(
+        patient_id="P-TEST-MED-001",
+        first_name="Test",
+        last_name="Patient",
+        date_of_birth="1975-06-15",
+        medications=medications,
+    )
+
+
 class TestBuildSummary:
     def test_basic_summary_fields(self) -> None:
         patient = _make_patient()
@@ -209,6 +219,28 @@ class TestBuildGroupedSections:
         assert sections["Begleitende Beschwerden"]["Schlechter Luft"] == "ja"
         assert sections["Medikamente"]["Aktuelle Medikamente"] == "ASS 100 mg"
         assert sections["Messwerte"]["Puls pro Minute"] == "92"
+
+    def test_hypertension_scenario_has_structured_sections(self) -> None:
+        summary = build_summary(
+            patient=_patient_with_medications(["Ramipril 5 mg"]),
+            scenario="C",
+            answers={
+                "bluthochdruck_bekannt": "ja",
+                "letzte_kontrolle": "vor 6 Monaten",
+                "messbedingungen": "fünf Minuten ruhig gesessen",
+                "brustschmerz": "nein",
+                "med_adhaerenz_0": "ja",
+                "weitere_medikamente": "Ibuprofen einmal wegen Kopfschmerzen",
+            },
+            vitals={"systolisch": 145, "diastolisch": 88, "puls": 72, "gewicht": 78},
+            red_flags=[],
+        )
+
+        sections = summary.grouped_sections
+        assert sections["Anlass und Verlauf"]["Bluthochdruck bereits bekannt"] == "ja"
+        assert sections["Messwerte"]["Oberer Blutdruckwert"] == "145"
+        assert sections["Medikamente"]["Ramipril 5 mg wie verordnet"] == "ja"
+        assert "Ibuprofen" in sections["Medikamente"]["Weitere oder gelegentlich eingenommene Medikamente"]
 
     def test_diabetes_scenario_has_sections(self) -> None:
         answers = {

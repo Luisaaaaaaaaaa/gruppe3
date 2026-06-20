@@ -146,6 +146,22 @@ def check_hypertension(answers: dict[str, str], vitals: dict[str, int | float] |
             triggered_by=f"puls={int(puls_val)}",
         ))
 
+    if _parse_ja_nein(answers.get("ohnmacht", "")):
+        flags.append(RedFlag(
+            rule_id="HYP-RF-014",
+            description="Ohnmacht oder Beinahe-Zusammenbruch bei auffälligem Blutdruck: sofortige ärztliche Beurteilung erforderlich.",
+            severity="critical",
+            triggered_by="ohnmacht=ja",
+        ))
+
+    if _parse_ja_nein(answers.get("herzklopfen", "")):
+        flags.append(RedFlag(
+            rule_id="HYP-RF-015",
+            description="Starkes Herzklopfen oder unregelmäßiger Herzschlag bei auffälligem Blutdruck: ärztliche Prüfung empfohlen.",
+            severity="warning",
+            triggered_by="herzklopfen=ja",
+        ))
+
     return flags
 
 
