@@ -10,6 +10,16 @@ if TYPE_CHECKING:
     from app.scenarios.hypertension_scenario import AnamnesisQuestion
 
 
+# Konfiguration des LLM-Endpunkts. Standardwerte zeigen auf den
+# selbst-gehosteten, OpenAI-kompatiblen Server. Per .env überschreibbar:
+#   LLM_BASE_URL=...
+#   LLM_API_KEY=...
+#   LLM_MODEL=...
+_DEFAULT_BASE_URL = "http://141.19.87.240:8000/v1"
+_DEFAULT_API_KEY = "local-dev-key"
+_DEFAULT_MODEL = "deepseek-v4-pro"
+
+
 def _load_env() -> None:
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
     if not env_path.exists():
@@ -29,19 +39,24 @@ def extract_answers(
     patient_text: str,
     questions: list[AnamnesisQuestion],
 ) -> dict[str, str]:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key or not patient_text.strip():
-        log_info("Keine API-Schlüssel oder kein Patiententext vorhanden, überspringe KI-Antwort-Extraktion.")
-        print("Fehlende API-Schlüssel")
+    if not patient_text.strip():
+        log_info("Kein Patiententext vorhanden, überspringe KI-Antwort-Extraktion.")
         return {}
+
+    base_url = os.environ.get("LLM_BASE_URL", _DEFAULT_BASE_URL)
+    api_key = os.environ.get("LLM_API_KEY", _DEFAULT_API_KEY)
+    model = os.environ.get("LLM_MODEL", _DEFAULT_MODEL)
 
     try:
-        from google import genai
+        from openai import OpenAI
     except ImportError:
-        log_info("GenAI-Bibliothek nicht installiert, überspringe KI-Antwort-Extraktion.")
+        log_info(
+            "openai-Bibliothek nicht installiert (pip install openai), "
+            "überspringe KI-Antwort-Extraktion."
+        )
         return {}
 
-    client = genai.Client(api_key=api_key)
+    client = OpenAI(base_url=base_url, api_key=api_key)
 
     questions_desc = [
         {
@@ -77,16 +92,27 @@ def extract_answers(
         "Antwort (nur JSON, kein weiterer Text):"
     )
 
+    raw = ""
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Du bist ein praeziser Extraktions-Assistent. "
+                        "Du antwortest ausschliesslich mit gueltigem JSON, "
+                        "ohne erklaerenden Text."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=1000,
         )
 
-        raw = getattr(response, "text", None)
+        raw = response.choices[0].message.content
         if not raw:
-            # Antwort ohne Text (z. B. durch Safety-Filter blockiert oder
-            # leere Antwort). Grund protokollieren statt still scheitern.
             log_info(
                 "KI-Antwort enthielt keinen Text. "
                 f"Vollständige Antwort: {response!r}"
