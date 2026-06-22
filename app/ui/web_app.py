@@ -833,19 +833,21 @@ def _handle_consent(
         return
 
     if answer == "ja":
-        consent_value = "ja"
+        # Die Schleife fuehrt die vollstaendige Einwilligungs-Transition durch
+        # (Bestaetigung anzeigen -> in den ANAMNESIS-Zustand wechseln). Der
+        # Zustand ist danach aufgeschoben (defer_anamnesis) und wartet auf den
+        # KI-Vorab-Chat. Den Einwilligungs-Callback NICHT zusaetzlich aufrufen,
+        # sonst wuerde erneut weitergeschaltet und die Anamnese uebersprungen.
         for ctrl in session.controllers:
             if ctrl.state == DialogueState.REQUEST_CONSENT:
                 ctrl._display(CONSENT_ACCEPTED)
                 ctrl._state_machine.advance()
                 ctrl._handle_state()
 
-        callback = session.pending_input
         session.pending_input = None
         session.messages.append(
             ChatEntry(role="user", text="Ja", tone="user")
         )
-        callback(consent_value)
         refresh_ui()
     else:
         session.show_reject_consent_dialog = True
