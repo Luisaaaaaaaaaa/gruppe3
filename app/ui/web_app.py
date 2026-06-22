@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from nicegui import ui
+    from nicegui import ui, run
 except ModuleNotFoundError as exc:
     raise RuntimeError(
         "NiceGUI ist nicht installiert. Bitte zuerst 'pip install -r requirements.txt' ausführen."
@@ -569,6 +569,7 @@ class BrowserSession:
     chat_input_text: str = ""
     prefilled_answers: dict[str, str] = field(default_factory=dict)
     chat_phase_done: bool = False
+    guided_started: bool = False
     anamnesis_mode: str | None = None
     speech_enabled: bool = True
     simulated_bp: dict | None = None
@@ -598,6 +599,7 @@ class BrowserSession:
         self.chat_input_text = ""
         self.prefilled_answers.clear()
         self.chat_phase_done = False
+        self.guided_started = False
         self.anamnesis_mode = None
         self.speech_enabled = True
         self.simulated_bp = None
@@ -872,6 +874,7 @@ def _confirm_reject_consent(
     session.messages.clear()
     session.anamnesis_mode = None
     session.chat_phase_done = False
+    session.guided_started = False
     session.prefilled_answers.clear()
     session.current_patient = None
     session.login_message = ""
@@ -1950,6 +1953,7 @@ def _start_scenarios(
     session.chat_input_text = ""
     session.prefilled_answers.clear()
     session.chat_phase_done = False
+    session.guided_started = False
     session.anamnesis_mode = None
     session.stage = "dialogue"
 
@@ -1959,6 +1963,8 @@ def _start_scenarios(
             patient=session.current_patient,
             display_message=lambda text: _append_system_message(session, text),
             request_input=lambda callback: _request_dialogue_input(session, callback),
+            # Fragen erst nach dem KI-Vorab-Chat stellen (auch im geführten Modus).
+            defer_anamnesis=True,
         )
         ctrl.start()
         session.controllers.append(ctrl)
@@ -2623,6 +2629,7 @@ def _do_reset_session(session: BrowserSession) -> None:
     session.pending_input = None
     session.anamnesis_mode = None
     session.chat_phase_done = False
+    session.guided_started = False
     session.prefilled_answers.clear()
     session.stage = "staff_selection" if session.is_personal_mode else "scenario"
 
@@ -3033,7 +3040,7 @@ def _render_symptom_chat(
 
         mic_button.on_click(_toggle_mic)
 
-        def _on_submit_chat() -> None:
+        async def _on_submit_chat() -> None:
             text = (symptom_input.value or "").strip()
             session.chat_input_text = text
 
@@ -3045,10 +3052,44 @@ def _render_symptom_chat(
                 return
 
             questions = [q for q, _ in ctrl.get_questions_with_answers()]
-            ui.notify("KI-Auswertung läuft...", color="info", position="top")
-            prefilled = extract_answers(text, questions)
+
+            # Lade-Dialog mit Spinner anzeigen, solange die KI auswertet.
+            # Der eigentliche (blockierende) Aufruf laeuft in einem Thread,
+            # damit die Oberflaeche nicht einfriert und der Hinweis sichtbar ist.
+            with ui.dialog() as loading_dialog, ui.card().classes(
+                "items-center gap-4 p-6"
+            ):
+                loading_dialog.props("persistent")
+                ui.spinner(size="lg", color="#0f766e")
+                ui.label("Die KI wertet Ihre Angaben aus …").classes(
+                    "text-base font-medium"
+                )
+                ui.label(
+                    "Bitte einen Moment Geduld, der Fragebogen wird vorbereitet."
+                ).classes("text-sm text-slate-500")
+            loading_dialog.open()
+
+            try:
+                prefilled = await run.io_bound(extract_answers, text, questions)
+            finally:
+                loading_dialog.close()
+
             session.prefilled_answers = prefilled
             session.chat_phase_done = True
+            if prefilled:
+                ui.notify(
+                    f"KI hat {len(prefilled)} Frage(n) vorausgefüllt.",
+                    color="positive",
+                    position="top",
+                )
+            else:
+                ui.notify(
+                    "Die KI konnte keine Angaben übernehmen. "
+                    "Bitte füllen Sie den Fragebogen manuell aus.",
+                    color="warning",
+                    position="top",
+                    multi_line=True,
+                )
             refresh_ui()
 
         def _on_skip() -> None:
@@ -3104,6 +3145,24 @@ def _check_live_form_escalation(
     return False
 
 
+def _begin_guided_questions(session: BrowserSession) -> None:
+    """Startet den geführten Dialog nach dem KI-Vorab-Chat.
+
+    Übernimmt die KI-Vorschläge in die Controller und überspringt die dadurch
+    bereits beantworteten Fragen. Wird genau einmal pro Anamnese ausgelöst.
+    """
+    if session.guided_started:
+        return
+    session.guided_started = True
+
+    controllers = session.controllers or (
+        [session.primary_controller] if session.primary_controller else []
+    )
+    for ctrl in controllers:
+        if ctrl is not None and ctrl.state == DialogueState.ANAMNESIS:
+            ctrl.begin_anamnesis(session.prefilled_answers)
+
+
 def _render_mass_anamnesis_single(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -3111,16 +3170,18 @@ def _render_mass_anamnesis_single(
     if ctrl is None:
         return
 
-    if session.anamnesis_mode == "guided":
-        _render_guided_dialogue(session, refresh_ui)
-        return
-
     if session.anamnesis_mode is None:
         _render_anamnesis_mode_choice(session, refresh_ui)
         return
 
+    # Der KI-Vorab-Chat läuft jetzt vor BEIDEN Modi (geführt und Formular).
     if not session.chat_phase_done:
         _render_symptom_chat(session, refresh_ui)
+        return
+
+    if session.anamnesis_mode == "guided":
+        _begin_guided_questions(session)
+        _render_guided_dialogue(session, refresh_ui)
         return
 
     questions_with_answers = ctrl.get_questions_with_answers()
@@ -3164,16 +3225,18 @@ def _render_mass_anamnesis_multi(
     if not controllers:
         return
 
-    if session.anamnesis_mode == "guided":
-        _render_guided_dialogue(session, refresh_ui)
-        return
-
     if session.anamnesis_mode is None:
         _render_anamnesis_mode_choice(session, refresh_ui)
         return
 
+    # Der KI-Vorab-Chat läuft jetzt vor BEIDEN Modi (geführt und Formular).
     if not session.chat_phase_done:
         _render_symptom_chat(session, refresh_ui)
+        return
+
+    if session.anamnesis_mode == "guided":
+        _begin_guided_questions(session)
+        _render_guided_dialogue(session, refresh_ui)
         return
 
     all_questions: list[tuple[DialogueController, DialogueQuestion, str]] = []

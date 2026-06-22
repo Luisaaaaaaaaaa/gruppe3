@@ -87,12 +87,17 @@ class DialogueController:
         patient: PatientRecord,
         display_message: Callable[[str], None],
         request_input: Callable[[Callable[[str], None]], None],
+        defer_anamnesis: bool = False,
     ) -> None:
         self._scenario_key = scenario_key
         self._scenario_id = SCENARIO_MAP.get(scenario_key, scenario_key)
         self._patient = patient
         self._display = display_message
         self._request_input = request_input
+        # Wenn True, werden die Anamnese-Fragen beim Eintritt in den
+        # ANAMNESIS-Zustand NICHT automatisch gestellt. Stattdessen startet
+        # die Weboberflaeche sie nach dem KI-Vorab-Chat ueber begin_anamnesis().
+        self._defer_anamnesis = defer_anamnesis
 
         self._state_machine = StateMachine()
         self._answers: dict[str, str] = {}
@@ -351,6 +356,10 @@ class DialogueController:
             self._request_input(self._on_consent_answer)
 
         elif state == DialogueState.ANAMNESIS:
+            # Im aufgeschobenen Modus wartet die Anamnese auf den KI-Vorab-Chat.
+            # begin_anamnesis() stoesst die Fragen spaeter an.
+            if self._defer_anamnesis:
+                return
             self._ask_next_question()
 
         elif state == DialogueState.VITAL_PARAMETERS:
@@ -390,10 +399,54 @@ class DialogueController:
         self._state_machine.advance()
         self._handle_state()
 
+    def begin_anamnesis(self, prefilled: dict[str, str] | None = None) -> None:
+        """Startet die Anamnese-Fragen nach dem KI-Vorab-Chat.
+
+        Bereits durch die KI extrahierte, gueltige Antworten werden uebernommen
+        und im Schritt-fuer-Schritt-Dialog uebersprungen. Loest die Anamnese aus
+        dem aufgeschobenen Zustand (siehe defer_anamnesis).
+        """
+        self._defer_anamnesis = False
+
+        if self.state != DialogueState.ANAMNESIS:
+            return
+
+        if prefilled:
+            question_keys = {q.key for q in self._questions}
+            for question in self._questions:
+                value = str(prefilled.get(question.key, "")).strip()
+                if question.key in question_keys and value and self._is_valid_answer(
+                    question, value
+                ):
+                    self._answers[question.key] = value
+
+        # KI-Antworten koennen bereits ein kritisches Warnzeichen enthalten.
+        if self._escalate_critical_acute_answers():
+            return
+
+        self._ask_next_question()
+
+    def _is_valid_answer(self, question: AnamnesisQuestion, value: str) -> bool:
+        """Prueft, ob ein (z. B. von der KI gelieferter) Wert zum Fragetyp passt."""
+        normalized = value.strip().lower()
+        if question.input_type == "ja_nein":
+            return normalized in ("ja", "j", "nein", "n", "yes", "no", "y")
+        if question.input_type == "zahl":
+            return _is_number_or_unknown(value)
+        return bool(value.strip())
+
     def _ask_next_question(self) -> None:
         while self._current_question_index < len(self._questions):
             question = self._questions[self._current_question_index]
             if self._should_ask_question(question):
+                # Bereits gueltig vorausgefuellte Fragen (KI) im Dialog
+                # ueberspringen, statt sie erneut zu stellen.
+                existing = (self._answers.get(question.key) or "").strip()
+                if existing and self._is_valid_answer(question, existing):
+                    self._asked_question_count += 1
+                    self._current_question_index += 1
+                    continue
+
                 self._asked_question_count += 1
                 self._display(f"\n{question.text}")
                 self._request_input(self._on_anamnesis_answer)
