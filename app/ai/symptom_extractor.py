@@ -82,9 +82,18 @@ def extract_answers(
             model="gemini-2.0-flash",
             contents=prompt,
         )
-        print(response)
-        print(response.text)  # Debug-Ausgabe
-        raw = response.text.strip()
+
+        raw = getattr(response, "text", None)
+        if not raw:
+            # Antwort ohne Text (z. B. durch Safety-Filter blockiert oder
+            # leere Antwort). Grund protokollieren statt still scheitern.
+            log_info(
+                "KI-Antwort enthielt keinen Text. "
+                f"Vollständige Antwort: {response!r}"
+            )
+            return {}
+
+        raw = raw.strip()
 
         if raw.startswith("```"):
             lines = raw.splitlines()
@@ -94,20 +103,42 @@ def extract_answers(
                 if not line.strip().startswith("```")
             ]
             raw = "\n".join(lines)
-        print("RAW:")
-        print(raw)
+
         parsed = json.loads(raw)
 
         if not isinstance(parsed, dict):
+            log_info(
+                f"KI-Antwort war kein JSON-Objekt, sondern {type(parsed).__name__}: {raw!r}"
+            )
             return {}
 
         valid_keys = {q.key for q in questions}
 
-        return {
+        result = {
             k: str(v)
             for k, v in parsed.items()
             if k in valid_keys and v
         }
 
-    except Exception:
+        if not result:
+            # JSON kam an, aber nichts Verwertbares (unbekannte Keys oder
+            # nur leere Werte). Hilft bei der Fehlersuche.
+            log_info(
+                "KI lieferte keine verwertbaren Antworten. "
+                f"Erlaubte Keys: {sorted(valid_keys)} – "
+                f"Antwort-Keys: {sorted(parsed.keys())}"
+            )
+
+        return result
+
+    except json.JSONDecodeError as exc:
+        log_info(f"KI-Antwort war kein gültiges JSON: {exc} – Rohtext: {raw!r}")
+        return {}
+    except Exception as exc:
+        import traceback
+
+        log_info(
+            "Fehler bei der KI-Antwort-Extraktion: "
+            f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+        )
         return {}
