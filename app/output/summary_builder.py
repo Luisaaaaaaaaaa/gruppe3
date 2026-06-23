@@ -32,6 +32,7 @@ def build_summary(
     vitals_source: str = "simuliert",
     vital_sources: dict[str, str] | None = None,
     red_flags: list[RedFlag] | None = None,
+    open_points: list[str] | None = None,
 ) -> AnamnesisSummary:
     if red_flags is None:
         red_flags = []
@@ -45,19 +46,8 @@ def build_summary(
 
     escalation_required = any(rf.severity == "critical" for rf in red_flags)
 
-    _ignored_keys = frozenset({
-        "blutdruck_messen",
-        "blutdruck_diastolisch",
-        "puls_messen",
-        "gewicht_messen",
-    })
-
-    open_points = [
-        f"Angabe zu '{key}' fehlt oder unbekannt."
-        for key, value in answers.items()
-        if key not in _ignored_keys
-        and (not value.strip() or value.strip().lower() == "unbekannt")
-    ]
+    if open_points is None:
+        open_points = []
 
     grouped_sections = build_grouped_sections(
         scenario, answers, vitals, patient.medications
@@ -77,6 +67,49 @@ def build_summary(
         open_points=open_points,
         grouped_sections=grouped_sections,
     )
+
+
+def _medication_name(patient_medications: list[str] | None, index_text: str) -> str:
+    try:
+        index = int(index_text)
+    except ValueError:
+        return f"Medikament {index_text}"
+    if patient_medications and index < len(patient_medications):
+        return patient_medications[index]
+    return f"Medikament {index + 1}"
+
+
+def _structured_medication_answers(
+    answers: dict[str, str],
+    patient_medications: list[str] | None,
+) -> dict[str, str]:
+    medications: dict[str, str] = {}
+
+    additional_present = answers.get("weitere_medikamente_vorhanden", "").strip()
+    if additional_present:
+        medications["Zusätzliche Medikamente vorhanden"] = additional_present
+        if additional_present.lower() in ("nein", "n", "no"):
+            medications["Zusätzliche Medikamente"] = "keine weiteren Medikamente angegeben"
+
+    for key, value in answers.items():
+        value = value.strip()
+        if not value:
+            continue
+
+        if key.startswith("med_dauer_einnahme_"):
+            name = _medication_name(patient_medications, key.removeprefix("med_dauer_einnahme_"))
+            medications[f"Dauermedikation {name} aktuell wie vermerkt"] = value
+        elif key.startswith("med_dauer_aenderung_"):
+            name = _medication_name(patient_medications, key.removeprefix("med_dauer_aenderung_"))
+            medications[f"Änderung bei Dauermedikation {name}"] = value
+        elif key.startswith("med_bedarf_einnahme_"):
+            name = _medication_name(patient_medications, key.removeprefix("med_bedarf_einnahme_"))
+            medications[f"Bedarfsmedikation {name} in letzter Zeit eingenommen"] = value
+        elif key.startswith("med_bedarf_grund_"):
+            name = _medication_name(patient_medications, key.removeprefix("med_bedarf_grund_"))
+            medications[f"Grund für Bedarfsmedikation {name}"] = value
+
+    return medications
 
 
 def build_grouped_sections(
@@ -144,10 +177,15 @@ def build_grouped_sections(
         add_section("Vorerkrankungen und Risiken", risks)
 
         medications = {}
+        if answers.get("medikamente_aktuell_liste", "").strip():
+            medications["Aktuelle Medikamente laut Akte / Änderungen"] = answers[
+                "medikamente_aktuell_liste"
+            ]
         if answers.get("medikamente", "").strip():
             medications["Aktuelle Medikamente"] = answers["medikamente"]
         if answers.get("weitere_medikamente", "").strip():
             medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
+        medications.update(_structured_medication_answers(answers, patient_medications))
         for key, value in answers.items():
             if key.startswith("med_adhaerenz_grund_"):
                 index = int(key.removeprefix("med_adhaerenz_grund_"))
@@ -233,10 +271,15 @@ def build_grouped_sections(
         add_chest_section("Vorerkrankungen und Risiken", risks)
 
         medications: dict[str, str] = {}
+        if answers.get("medikamente_aktuell_liste", "").strip():
+            medications["Aktuelle Medikamente laut Akte / Änderungen"] = answers[
+                "medikamente_aktuell_liste"
+            ]
         if answers.get("medikamente", "").strip():
             medications["Aktuelle Medikamente"] = answers["medikamente"]
         if answers.get("weitere_medikamente", "").strip():
             medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
+        medications.update(_structured_medication_answers(answers, patient_medications))
         for key, value in answers.items():
             if key.startswith("med_adhaerenz_grund_"):
                 index = int(key.removeprefix("med_adhaerenz_grund_"))
@@ -325,10 +368,15 @@ def build_grouped_sections(
         add_hypertension_section("Vorerkrankungen und Lebensweise", risks)
 
         medications: dict[str, str] = {}
+        if answers.get("medikamente_aktuell_liste", "").strip():
+            medications["Aktuelle Medikamente laut Akte / Änderungen"] = answers[
+                "medikamente_aktuell_liste"
+            ]
         if answers.get("medikamente", "").strip():
             medications["Aktuelle Medikamente"] = answers["medikamente"]
         if answers.get("weitere_medikamente", "").strip():
             medications["Weitere oder gelegentlich eingenommene Medikamente"] = answers["weitere_medikamente"]
+        medications.update(_structured_medication_answers(answers, patient_medications))
         for key, value in answers.items():
             if key.startswith("med_adhaerenz_grund_"):
                 index = int(key.removeprefix("med_adhaerenz_grund_"))
@@ -345,10 +393,10 @@ def build_grouped_sections(
         verlauf: dict[str, str] = {}
 
         gewicht = answers.get("gewicht_aktuell", "").strip()
-        if gewicht and gewicht.lower() != "unbekannt":
-            verlauf["Aktuelles Gewicht"] = f"{gewicht} kg"
-        elif "gewicht" in vitals:
+        if "gewicht" in vitals:
             verlauf["Aktuelles Gewicht"] = f"{vitals['gewicht']} kg"
+        elif gewicht and gewicht.lower() != "unbekannt":
+            verlauf["Aktuelles Gewicht"] = f"{gewicht} kg"
         else:
             verlauf["Aktuelles Gewicht"] = "keine Angabe"
 
@@ -362,17 +410,17 @@ def build_grouped_sections(
         sys_val = answers.get("blutdruck_systolisch", "").strip()
         dia_val = answers.get("blutdruck_diastolisch", "").strip()
 
-        if sys_val.lower() != "unbekannt" and sys_val:
-            sys_str = sys_val
-        elif "systolisch" in vitals:
+        if "systolisch" in vitals:
             sys_str = str(vitals["systolisch"])
+        elif sys_val.lower() != "unbekannt" and sys_val:
+            sys_str = sys_val
         else:
             sys_str = "unbekannt"
 
-        if dia_val.lower() != "unbekannt" and dia_val:
-            dia_str = dia_val
-        elif "diastolisch" in vitals:
+        if "diastolisch" in vitals:
             dia_str = str(vitals["diastolisch"])
+        elif dia_val.lower() != "unbekannt" and dia_val:
+            dia_str = dia_val
         else:
             dia_str = "unbekannt"
 
@@ -409,12 +457,16 @@ def build_grouped_sections(
         sections["Aktuelle Symptome"] = symptome
 
         medikation: dict[str, str] = {}
+        medication_list_value = answers.get("medikamente_aktuell_liste", "")
+        if medication_list_value:
+            medikation["Aktuelle Medikamente laut Akte / Änderungen"] = medication_list_value
         med_value = answers.get("medikamente", "")
         if med_value:
             medikation["Aktuelle Medikamente"] = med_value
         additional_med_value = answers.get("weitere_medikamente", "")
         if additional_med_value:
             medikation["Weitere oder gelegentlich eingenommene Medikamente"] = additional_med_value
+        medikation.update(_structured_medication_answers(answers, patient_medications))
         diag_value = answers.get("bekannte_diagnosen", "")
         if diag_value:
             medikation["Bekannte Diagnosen"] = diag_value
@@ -481,8 +533,5 @@ def build_grouped_sections(
             if answers.get(key, ""):
                 offene_fragen[label] = answers[key]
         sections["Offene Fragen"] = offene_fragen
-
-        if answers:
-            sections["Anamnese"] = {k: v for k, v in answers.items() if v.strip()}
 
     return sections

@@ -62,7 +62,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
         input_type="zahl",
         slider_min=30,
         slider_max=300,
-        slider_step=1,
+        slider_step=0.1,
     ),
     AnamnesisQuestion("gewicht_messen", "Bitte wiegen Sie sich jetzt.", required=False),
     AnamnesisQuestion("gewichtsveraenderung", "Hat sich Ihr Gewicht seit der letzten Kontrolle verändert?", input_type="ja_nein"),

@@ -93,7 +93,7 @@ class TestBuildSummary:
         )
         assert summary.escalation_required is False
 
-    def test_open_points_for_empty_answers(self) -> None:
+    def test_open_points_are_provided_by_dialogue_controller(self) -> None:
         patient = _make_patient()
         summary = build_summary(
             patient=patient,
@@ -102,10 +102,10 @@ class TestBuildSummary:
             vitals=None,
             vitals_source="simuliert",
             red_flags=[],
+            open_points=["Angabe zu 'feld1' fehlt oder ist unbekannt."],
         )
-        assert len(summary.open_points) == 2
+        assert len(summary.open_points) == 1
         assert any("feld1" in p for p in summary.open_points)
-        assert any("feld2" in p for p in summary.open_points)
 
     def test_no_open_points_when_all_filled(self) -> None:
         patient = _make_patient()
@@ -251,7 +251,8 @@ class TestBuildGroupedSections:
                 "letzte_kontrolle": "vor 6 Monaten",
                 "messbedingungen": "fünf Minuten ruhig gesessen",
                 "brustschmerz": "nein",
-                "med_adhaerenz_0": "ja",
+                "med_dauer_einnahme_0": "ja",
+                "weitere_medikamente_vorhanden": "ja",
                 "weitere_medikamente": "Ibuprofen einmal wegen Kopfschmerzen",
             },
             vitals={"systolisch": 145, "diastolisch": 88, "puls": 72, "gewicht": 78},
@@ -261,7 +262,8 @@ class TestBuildGroupedSections:
         sections = summary.grouped_sections
         assert sections["Anlass und Verlauf"]["Bluthochdruck bereits bekannt"] == "ja"
         assert sections["Messwerte"]["Oberer Blutdruckwert"] == "145"
-        assert sections["Medikamente"]["Ramipril 5 mg wie verordnet"] == "ja"
+        assert sections["Medikamente"]["Dauermedikation Ramipril 5 mg aktuell wie vermerkt"] == "ja"
+        assert sections["Medikamente"]["Zusätzliche Medikamente vorhanden"] == "ja"
         assert "Ibuprofen" in sections["Medikamente"]["Weitere oder gelegentlich eingenommene Medikamente"]
 
     def test_diabetes_scenario_has_sections(self) -> None:
@@ -289,7 +291,7 @@ class TestBuildGroupedSections:
             "med_adhaerenz_grund_1": "Ich habe Nebenwirkungen",
         }
         sections = build_grouped_sections("D", answers, {})
-        assert "Anamnese" in sections
+        assert "Anamnese" not in sections
         assert "Verlauf" in sections
         assert "Aktuelle Symptome" in sections
         assert "Medikation" in sections

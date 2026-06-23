@@ -4,8 +4,12 @@ from nicegui import ui
 
 from app.ui.web_app import (
     _SliderField,
+    _clear_simulator_state_for_manual_input,
+    _device_prefilled_answers,
+    _device_prefilled_sources,
     _set_unknown_state,
     _simulate_weight_in_form,
+    _update_simulator_state_from_form,
 )
 
 
@@ -43,11 +47,11 @@ def test_unknown_state_updates_all_blood_pressure_controls() -> None:
 
 
 def test_weight_simulator_recovers_from_unknown_state(monkeypatch) -> None:
-    slider = ui.slider(min=30, max=300, step=1, value=30)
+    slider = ui.slider(min=30, max=300, step=0.1, value=30)
     checkbox = ui.checkbox("unbekannt", value=True)
-    number_input = ui.number("Messwert", value=30, min=30, max=300, step=1)
+    number_input = ui.number("Messwert", value=30, min=30, max=300, step=0.1)
     info_label = ui.label("")
-    field = _SliderField(slider, checkbox, number_input, 30, 300, 1, info_label)
+    field = _SliderField(slider, checkbox, number_input, 30, 300, 0.1, info_label)
     slider.disable()
     number_input.disable()
 
@@ -68,6 +72,126 @@ def test_weight_simulator_recovers_from_unknown_state(monkeypatch) -> None:
     assert number_input.enabled is True
     assert slider.value == 72.5
     assert number_input.value == 72.5
-    assert field.value == "72"
+    assert field.value == "72.5"
     assert field.measurement_source == "simuliert"
     assert "BMI: 25.1" in info_label.text
+
+
+def test_device_prefill_maps_sidebar_simulator_values_to_anamnesis_fields() -> None:
+    session = SimpleNamespace(
+        simulated_bp={"systolisch": 131, "diastolisch": 76},
+        simulated_weight={"gewicht": 67.0},
+        simulated_oximeter={"puls": 78},
+    )
+
+    assert _device_prefilled_answers(session) == {
+        "blutdruck_systolisch": "131",
+        "blutdruck_diastolisch": "76",
+        "gewicht": "67.0",
+        "gewicht_aktuell": "67.0",
+        "puls": "78",
+    }
+    assert _device_prefilled_sources(session) == {
+        "systolisch": "simuliert",
+        "diastolisch": "simuliert",
+        "gewicht": "simuliert",
+        "puls": "simuliert",
+    }
+
+
+def test_form_simulator_updates_sidebar_state_and_controller_vitals() -> None:
+    recorded: list[tuple[dict, str]] = []
+    controller = SimpleNamespace(record_vitals=lambda values, source: recorded.append((values, source)))
+    session = SimpleNamespace(
+        simulated_bp=None,
+        simulated_weight=None,
+        simulated_oximeter=None,
+        controllers=[controller],
+        controller=None,
+    )
+
+    _update_simulator_state_from_form(
+        session, "blood_pressure", {"systolisch": 140, "diastolisch": 90}
+    )
+    _update_simulator_state_from_form(
+        session, "weight", {"gewicht": 72.5, "bmi": 25.1, "klasse": "Normalgewicht"}
+    )
+    _update_simulator_state_from_form(session, "pulse", {"puls": 82})
+
+    assert session.simulated_bp == {"systolisch": 140, "diastolisch": 90}
+    assert session.simulated_weight["gewicht"] == 72.5
+    assert session.simulated_oximeter == {"puls": 82}
+    assert ({"systolisch": 140, "diastolisch": 90}, "simuliert") in recorded
+    assert ({"gewicht": 72.5}, "simuliert") in recorded
+    assert ({"puls": 82}, "simuliert") in recorded
+
+
+def test_manual_vital_input_clears_matching_sidebar_simulator_state() -> None:
+    recorded: list[tuple[dict, str]] = []
+    cleared: list[tuple[str, ...]] = []
+    controller = SimpleNamespace(
+        record_vitals=lambda values, source: recorded.append((values, source)),
+        clear_vitals=lambda keys: cleared.append(tuple(keys)),
+    )
+    session = SimpleNamespace(
+        simulated_bp={"systolisch": 131, "diastolisch": 76},
+        simulated_weight={"gewicht": 67.0, "bmi": 23.2, "klasse": "Normalgewicht"},
+        simulated_oximeter={"spo2": 98, "puls": 78},
+        prefilled_answers={},
+        controllers=[controller],
+        controller=None,
+    )
+
+    _clear_simulator_state_for_manual_input(
+        session,
+        "blood_pressure",
+        {"blutdruck_systolisch": "145", "blutdruck_diastolisch": "91"},
+    )
+    _clear_simulator_state_for_manual_input(
+        session,
+        "weight",
+        {"gewicht_aktuell": "70"},
+    )
+    _clear_simulator_state_for_manual_input(
+        session,
+        "pulse",
+        {"puls": "82"},
+    )
+
+    assert session.simulated_bp is None
+    assert session.simulated_weight is None
+    assert session.simulated_oximeter is None
+    assert session.prefilled_answers["blutdruck_systolisch"] == "145"
+    assert session.prefilled_answers["gewicht_aktuell"] == "70"
+    assert session.prefilled_answers["puls"] == "82"
+    assert ({"systolisch": 145.0, "diastolisch": 91.0}, "manuell eingegeben") in recorded
+    assert ({"gewicht": 70.0}, "manuell eingegeben") in recorded
+    assert ({"puls": 82.0}, "manuell eingegeben") in recorded
+    assert cleared == []
+
+
+def test_unknown_manual_vital_input_removes_previous_controller_value() -> None:
+    recorded: list[tuple[dict, str]] = []
+    cleared: list[tuple[str, ...]] = []
+    controller = SimpleNamespace(
+        record_vitals=lambda values, source: recorded.append((values, source)),
+        clear_vitals=lambda keys: cleared.append(tuple(keys)),
+    )
+    session = SimpleNamespace(
+        simulated_bp={"systolisch": 131, "diastolisch": 76},
+        simulated_weight=None,
+        simulated_oximeter=None,
+        prefilled_answers={},
+        controllers=[controller],
+        controller=None,
+    )
+
+    _clear_simulator_state_for_manual_input(
+        session,
+        "blood_pressure",
+        {"blutdruck_systolisch": "unbekannt", "blutdruck_diastolisch": "unbekannt"},
+    )
+
+    assert session.simulated_bp is None
+    assert recorded == []
+    assert cleared == [("systolisch", "diastolisch")]

@@ -105,3 +105,46 @@ def test_preview_of_critical_value_does_not_end_anamnesis() -> None:
     assert any(flag.severity == "critical" for flag in flags)
     assert controller.state == DialogueState.ANAMNESIS
     assert controller.summary is None
+
+
+def test_hidden_follow_up_questions_are_not_open_points() -> None:
+    callbacks: list = []
+    controller = DialogueController(
+        scenario_key="D",
+        patient=PatientRecord(patient_id="open-points", date_of_birth="1990-01-01"),
+        display_message=lambda _text: None,
+        request_input=callbacks.append,
+    )
+    controller.start()
+    callbacks.pop()("ja")
+
+    answers: dict[str, str] = {}
+    for question, _answer in controller.get_questions_with_answers():
+        if question.key in {
+            "hypo_hyper_beschwerden",
+            "gewichtsveraenderung_details",
+            "blutdruck_zu_hause_details",
+            "folgeerkrankungen_details",
+            "offene_wunde_fussproblem_details",
+            "hba1c_wert",
+            "blutzuckerwert_details",
+            "alkohol",
+        }:
+            answers[question.key] = ""
+        elif question.key == "blutdruck_systolisch":
+            answers[question.key] = "120"
+        elif question.key == "blutdruck_diastolisch":
+            answers[question.key] = "80"
+        elif question.key == "gewicht_aktuell":
+            answers[question.key] = "67"
+        elif question.input_type == "ja_nein":
+            answers[question.key] = "nein"
+        elif question.input_type == "zahl":
+            answers[question.key] = "1"
+        else:
+            answers[question.key] = "x"
+
+    controller.submit_mass_anamnesis(answers)
+
+    assert controller.summary is not None
+    assert controller.summary.open_points == []

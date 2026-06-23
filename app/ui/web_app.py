@@ -569,6 +569,7 @@ class BrowserSession:
     avatar_messages: list[ChatEntry] = field(default_factory=list)
     chat_input_text: str = ""
     prefilled_answers: dict[str, str] = field(default_factory=dict)
+    ai_prefilled_keys: set[str] = field(default_factory=set)
     chat_phase_done: bool = False
     guided_started: bool = False
     anamnesis_mode: str | None = None
@@ -600,6 +601,7 @@ class BrowserSession:
         self.avatar_messages.clear()
         self.chat_input_text = ""
         self.prefilled_answers.clear()
+        self.ai_prefilled_keys.clear()
         self.chat_phase_done = False
         self.guided_started = False
         self.anamnesis_mode = None
@@ -646,7 +648,10 @@ class _SliderField:
         value = self.number_input.value
         if value in (None, ""):
             return ""
-        return str(int(float(value)))
+        numeric_value = float(value)
+        if self.step < 1:
+            return f"{numeric_value:.1f}".rstrip("0").rstrip(".")
+        return str(int(numeric_value))
 
 
 @dataclass
@@ -891,6 +896,7 @@ def _confirm_reject_consent(
     session.chat_phase_done = False
     session.guided_started = False
     session.prefilled_answers.clear()
+    session.ai_prefilled_keys.clear()
     session.current_patient = None
     session.login_message = ""
     session.login_tone = "tone-info"
@@ -2090,6 +2096,7 @@ def _start_scenarios(
     session.avatar_messages.clear()
     session.chat_input_text = ""
     session.prefilled_answers.clear()
+    session.ai_prefilled_keys.clear()
     session.chat_phase_done = False
     session.guided_started = False
     session.anamnesis_mode = None
@@ -2173,10 +2180,49 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         return
 
     summary = ctrl.summary
+    summary_controllers = [
+        controller
+        for controller in (session.controllers or [ctrl])
+        if controller is not None and controller.summary is not None
+    ]
+    summaries = [
+        controller.summary
+        for controller in summary_controllers
+    ]
+    if not summaries:
+        summaries = [summary]
 
     scenario_text = " + ".join(
         _get_scenario_title(k) for k in session.selected_scenarios
     )
+
+    merged_vitals: dict[str, int | float] = {}
+    merged_vital_sources: dict[str, str] = {}
+    for item in summaries:
+        merged_vitals.update(item.vitals)
+        merged_vital_sources.update(item.vital_sources)
+
+    complete_answers: dict[str, str] = {}
+    for controller in summary_controllers:
+        item = controller.summary
+        if item is None:
+            continue
+        question_labels = {
+            question.key: " ".join(question.text.split())
+            for question, _answer in controller.get_questions_with_answers()
+        }
+        scenario_prefix = f"{_get_scenario_title(item.scenario)}: " if len(summaries) > 1 else ""
+        for question, _answer in controller.get_questions_with_answers():
+            key = question.key
+            value = str(item.answers.get(key, "")).strip()
+            if not value and not controller.is_question_visible(key, item.answers):
+                continue
+            label = f"{scenario_prefix}{question_labels.get(key, key)}"
+            display_value = "keine Angabe" if not value or value.lower() == "unbekannt" else value
+            if label not in complete_answers:
+                complete_answers[label] = display_value
+            elif complete_answers[label] != display_value:
+                complete_answers[f"{label} ({item.scenario})"] = display_value
 
     def _download_pdf() -> None:
         try:
@@ -2255,35 +2301,50 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                     **{
                         _vital_labels.get(key, key): (
                             f"{value} {_vital_units.get(key, '')} "
-                            f"(Quelle: {summary.vital_sources.get(key, summary.vitals_source)})"
+                            f"(Quelle: {merged_vital_sources.get(key, summary.vitals_source)})"
                         ).strip()
-                        for key, value in summary.vitals.items()
+                        for key, value in merged_vitals.items()
                     },
+                },
+            )
+
+        red_flags = [rf for item in summaries for rf in item.red_flags]
+        if red_flags:
+            _render_summary_section(
+                "Warnhinweise / Red Flags",
+                {
+                    rf.rule_id: f"{rf.severity}: {rf.description}"
+                    for rf in red_flags
                 },
             )
 
         _render_summary_actions(sticky=True)
 
-        if summary.grouped_sections:
-            for title, fields in summary.grouped_sections.items():
-                _render_summary_section(title, fields)
+        if any(item.grouped_sections for item in summaries):
+            multiple_summaries = len(summaries) > 1
+            for item in summaries:
+                for title, fields in item.grouped_sections.items():
+                    section_title = (
+                        f"{_get_scenario_title(item.scenario)}: {title}"
+                        if multiple_summaries
+                        else title
+                    )
+                    _render_summary_section(section_title, fields)
         else:
-            _render_summary_section("Anamnese-Antworten", summary.answers)
+            _render_summary_section("Anamnese-Antworten", complete_answers)
 
-        if summary.red_flags:
-            _render_summary_section(
-                "Red Flags",
-                {
-                    rf.rule_id: f"{rf.severity}: {rf.description}"
-                    for rf in summary.red_flags
-                },
-            )
-
-        if summary.open_points:
+        open_points: list[str] = []
+        for item in summaries:
+            prefix = f"{_get_scenario_title(item.scenario)}: " if len(summaries) > 1 else ""
+            open_points.extend(f"{prefix}{point}" for point in item.open_points)
+        if open_points:
             _render_summary_section(
                 "Offene Punkte",
-                {f"Punkt {index + 1}": point for index, point in enumerate(summary.open_points)},
+                {f"Punkt {index + 1}": point for index, point in enumerate(open_points)},
             )
+
+        if complete_answers:
+            _render_summary_section("Vollständige Angaben", complete_answers)
 
         _render_summary_actions()
 
@@ -2317,24 +2378,26 @@ def _set_unknown_state(is_unknown: bool | None, *controls: object) -> None:
             control.enable()
 
 
-def _simulate_pulse(fields: dict[str, object]) -> None:
+def _simulate_pulse(fields: dict[str, object]) -> dict[str, int] | None:
     puls_field = fields.get("puls")
     if not isinstance(puls_field, _SliderField):
-        return
+        return None
     simulated = Simulator.simuliere_puls()
+    _set_field_source(puls_field, "simuliert")
     puls_field.slider.enable()
     puls_field.number_input.enable()
     puls_field.unknown_checkbox.set_value(False)
     puls_field.slider.set_value(simulated)
     puls_field.number_input.set_value(simulated)
-    _set_field_source(puls_field, "simuliert")
+    return {"puls": simulated}
 
 
-def _simulate_blood_pressure(fields: dict[str, object]) -> None:
+def _simulate_blood_pressure(fields: dict[str, object]) -> dict[str, int] | None:
     bp_field = fields.get("blutdruck_systolisch")
     if not isinstance(bp_field, _BloodPressureField):
-        return
+        return None
     bp = Simulator.simuliere_blutdruck()
+    _set_field_source(bp_field, "simuliert")
     bp_field.unknown_checkbox.set_value(False)
     bp_field.sys_slider.set_value(bp["systolisch"])
     bp_field.sys_input.set_value(bp["systolisch"])
@@ -2344,15 +2407,17 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> None:
     bp_field.sys_input.enable()
     bp_field.dia_slider.enable()
     bp_field.dia_input.enable()
-    _set_field_source(bp_field, "simuliert")
+    return bp
 
 
-def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueController) -> None:
+def _simulate_weight_in_form(
+    fields: dict[str, object], controller: DialogueController
+) -> dict | None:
     weight_field = fields.get("gewicht")
     if weight_field is None:
         weight_field = fields.get("gewicht_aktuell")
     if not isinstance(weight_field, _SliderField):
-        return
+        return None
     patient = controller.get_patient()
     sim = Simulator(
         geschlecht=patient.details.gender,
@@ -2363,6 +2428,7 @@ def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueCont
     simulated = result["gewicht"]
     bmi = result["bmi"]
     klasse = result["klasse"]
+    _set_field_source(weight_field, "simuliert")
     weight_field.slider.enable()
     weight_field.number_input.enable()
     weight_field.unknown_checkbox.set_value(False)
@@ -2370,7 +2436,7 @@ def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueCont
     weight_field.number_input.set_value(simulated)
     if weight_field.info_label is not None:
         weight_field.info_label.set_text(f"BMI: {bmi} ({klasse})")
-    _set_field_source(weight_field, "simuliert")
+    return result
 
 
 def _build_question_form(
@@ -2384,6 +2450,10 @@ def _build_question_form(
     live_visibility: bool = True,
     prefilled: dict[str, str] | None = None,
     live_escalation_callback: Callable[[dict[str, str]], bool] | None = None,
+    simulator_update_callback: Callable[[str, dict], None] | None = None,
+    manual_vital_callback: Callable[[str, dict[str, str]], None] | None = None,
+    prefilled_vital_sources: dict[str, str] | None = None,
+    ai_prefilled_keys: set[str] | None = None,
 ) -> None:
     if controller is None:
         return
@@ -2393,6 +2463,9 @@ def _build_question_form(
     q_text_map: dict[str, str] = {q.key: q.text for q, _ in questions_with_answers}
     input_types: dict[str, str] = {q.key: q.input_type for q, _ in questions_with_answers}
     required_keys: set[str] = {q.key for q, _ in questions_with_answers if q.required}
+    answer_by_key: dict[str, str] = {q.key: answer for q, answer in questions_with_answers}
+    prefilled_vital_sources = prefilled_vital_sources or {}
+    ai_prefilled_keys = ai_prefilled_keys or set()
 
     def _collect_values() -> dict[str, str]:
         result: dict[str, str] = {}
@@ -2453,16 +2526,45 @@ def _build_question_form(
             _run_live_escalation()
         return _handler
 
+    def _mark_manual_vital(kind: str, field: object | None = None) -> None:
+        if field is not None:
+            _set_field_source(field, "manuell eingegeben")
+        if manual_vital_callback is not None:
+            manual_vital_callback(kind, _collect_values())
+
+    def _handle_unknown_vital_change(
+        is_unknown: bool,
+        kind: str,
+        answer_key: str,
+        *controls: object,
+    ) -> None:
+        _set_unknown_state(is_unknown, *controls)
+        field = fields.get(answer_key)
+        simulator_just_supplied_value = (
+            not is_unknown
+            and getattr(field, "measurement_source", "") == "simuliert"
+        )
+        if not simulator_just_supplied_value:
+            _mark_manual_vital(kind, field)
+        _refresh_visibility()
+        _run_live_escalation()
+
     def _simulate_pulse_and_check() -> None:
-        _simulate_pulse(fields)
+        result = _simulate_pulse(fields)
+        if result is not None and simulator_update_callback is not None:
+            simulator_update_callback("pulse", result)
         _run_live_escalation()
 
     def _simulate_blood_pressure_and_check() -> None:
-        _simulate_blood_pressure(fields)
+        result = _simulate_blood_pressure(fields)
+        if result is not None and simulator_update_callback is not None:
+            simulator_update_callback("blood_pressure", result)
         _run_live_escalation()
 
     def _simulate_weight_and_check() -> None:
-        _simulate_weight_in_form(fields, controller)
+        result = _simulate_weight_in_form(fields, controller)
+        if result is not None and simulator_update_callback is not None:
+            simulator_update_callback("weight", result)
         _run_live_escalation()
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
@@ -2477,13 +2579,14 @@ def _build_question_form(
             if prefilled and key in prefilled and prefilled[key]:
                 effective_answer = prefilled[key]
                 is_prefilled = True
+            is_ai_prefilled = key in ai_prefilled_keys
 
             label = question.text
             if key in required_keys:
                 label = f"{label} *"
 
             card_classes = "surface-card w-full shadow-none"
-            if is_prefilled:
+            if is_ai_prefilled:
                 card_classes += " border-l-4 border-l-[#17603d]"
 
             if key == "puls_messen":
@@ -2503,6 +2606,33 @@ def _build_question_form(
                 continue
 
             if key == "blutdruck_systolisch":
+                sys_answer = str(
+                    (prefilled or {}).get(
+                        "blutdruck_systolisch",
+                        answer_by_key.get("blutdruck_systolisch", ""),
+                    )
+                ).strip()
+                dia_answer = str(
+                    (prefilled or {}).get(
+                        "blutdruck_diastolisch",
+                        answer_by_key.get("blutdruck_diastolisch", ""),
+                    )
+                ).strip()
+                is_unknown = (
+                    not sys_answer
+                    or not dia_answer
+                    or sys_answer.lower() == "unbekannt"
+                    or dia_answer.lower() == "unbekannt"
+                )
+                try:
+                    initial_sys = int(float(sys_answer.replace(",", ".")))
+                except ValueError:
+                    initial_sys = 120
+                try:
+                    initial_dia = int(float(dia_answer.replace(",", ".")))
+                except ValueError:
+                    initial_dia = 80
+
                 with ui.card().classes(card_classes) as card:
                     containers[key] = card
                     with ui.column().classes("w-full gap-3"):
@@ -2514,10 +2644,10 @@ def _build_question_form(
                         )
                         with ui.column().classes("w-full gap-1"):
                             sys_slider = ui.slider(
-                                min=80, max=250, step=1, value=120
+                                min=80, max=250, step=1, value=initial_sys
                             ).classes("w-full")
                             sys_input = ui.number(
-                                "Oberer Wert", value=120, min=80, max=250, step=1
+                                "Oberer Wert", value=initial_sys, min=80, max=250, step=1
                             ).props("outlined").classes(
                                 "w-full sm:max-w-[220px]"
                             )
@@ -2525,19 +2655,17 @@ def _build_question_form(
                                 "update:model-value",
                                 lambda e: sys_input.set_value(int(float(e.args))),
                             )
-                            sys_slider.on("change", lambda _: _run_live_escalation())
                             sys_input.on(
                                 "update:model-value",
                                 lambda e: sys_slider.set_value(int(float(e.args)))
                                 if e.args not in (None, "") else None,
                             )
-                            sys_input.on("blur", lambda _: _run_live_escalation())
                         with ui.column().classes("w-full gap-1"):
                             dia_slider = ui.slider(
-                                min=40, max=150, step=1, value=80
+                                min=40, max=150, step=1, value=initial_dia
                             ).classes("w-full")
                             dia_input = ui.number(
-                                "Unterer Wert", value=80, min=40, max=150, step=1
+                                "Unterer Wert", value=initial_dia, min=40, max=150, step=1
                             ).props("outlined").classes(
                                 "w-full sm:max-w-[220px]"
                             )
@@ -2545,14 +2673,11 @@ def _build_question_form(
                                 "update:model-value",
                                 lambda e: dia_input.set_value(int(float(e.args))),
                             )
-                            dia_slider.on("change", lambda _: _run_live_escalation())
                             dia_input.on(
                                 "update:model-value",
                                 lambda e: dia_slider.set_value(int(float(e.args)))
                                 if e.args not in (None, "") else None,
                             )
-                            dia_input.on("blur", lambda _: _run_live_escalation())
-                        is_unknown = str(effective_answer).strip().lower() == "unbekannt"
                         unknown_checkbox = ui.checkbox(
                             "unbekannt", value=is_unknown
                         )
@@ -2560,12 +2685,14 @@ def _build_question_form(
                             is_unknown, sys_slider, sys_input, dia_slider, dia_input
                         )
                         unknown_checkbox.on_value_change(
-                            lambda e: (
-                                _set_unknown_state(
-                                    e.value, sys_slider, sys_input, dia_slider, dia_input
-                                ),
-                                _refresh_visibility(),
-                                _run_live_escalation(),
+                            lambda e: _handle_unknown_vital_change(
+                                bool(e.value),
+                                "blood_pressure",
+                                key,
+                                sys_slider,
+                                sys_input,
+                                dia_slider,
+                                dia_input,
                             )
                         )
                 fields[key] = _BloodPressureField(
@@ -2575,22 +2702,37 @@ def _build_question_form(
                     "Ausgewählt: manuelle Eingabe"
                 ).classes("text-sm font-medium text-[#0f766e]")
                 fields[key].source_label = source_label
-                fields[key].measurement_source = "manuell eingegeben"
+                fields[key].measurement_source = prefilled_vital_sources.get(
+                    "systolisch", "manuell eingegeben"
+                )
+                _set_field_source(fields[key], fields[key].measurement_source)
                 sys_slider.on(
-                    "update:model-value",
-                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                    "change",
+                    lambda _, field=fields[key]: (
+                        _mark_manual_vital("blood_pressure", field),
+                        _run_live_escalation(),
+                    ),
                 )
                 dia_slider.on(
-                    "update:model-value",
-                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                    "change",
+                    lambda _, field=fields[key]: (
+                        _mark_manual_vital("blood_pressure", field),
+                        _run_live_escalation(),
+                    ),
                 )
                 sys_input.on(
-                    "update:model-value",
-                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                    "blur",
+                    lambda _, field=fields[key]: (
+                        _mark_manual_vital("blood_pressure", field),
+                        _run_live_escalation(),
+                    ),
                 )
                 dia_input.on(
-                    "update:model-value",
-                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                    "blur",
+                    lambda _, field=fields[key]: (
+                        _mark_manual_vital("blood_pressure", field),
+                        _run_live_escalation(),
+                    ),
                 )
                 ui.button(
                     "Blutdruck-Simulator verwenden",
@@ -2603,7 +2745,7 @@ def _build_question_form(
                 ui.label(label).classes(
                     "whitespace-pre-wrap text-[0.97rem] leading-7 text-slate-600"
                 )
-                if is_prefilled:
+                if is_ai_prefilled:
                     ui.label("KI-Vorschlag").classes(
                         "text-[0.7rem] font-bold uppercase tracking-[0.1em] "
                         "text-[#17603d] bg-[#e3f5e9] px-2 py-0.5 rounded w-fit"
@@ -2639,6 +2781,11 @@ def _build_question_form(
                             init_val = min_val
 
                         init_val = max(min_val, min(max_val, init_val))
+                        vital_slider_keys = {"puls", "gewicht", "gewicht_aktuell"}
+                        is_unknown = (
+                            key in vital_slider_keys
+                            and not str(effective_answer).strip()
+                        )
 
                         with ui.column().classes("w-full gap-1"):
                             slider = ui.slider(
@@ -2646,7 +2793,7 @@ def _build_question_form(
                             ).classes("w-full")
                             number_input = ui.number(
                                 "Messwert",
-                                value=int(init_val),
+                                value=init_val if step < 1 else int(init_val),
                                 min=min_val,
                                 max=max_val,
                                 step=step,
@@ -2656,29 +2803,38 @@ def _build_question_form(
                             slider.on(
                                 "update:model-value",
                                 lambda e, inp=number_input: inp.set_value(
-                                    int(float(e.args))
+                                    float(e.args)
                                 ),
                             )
-                            slider.on("change", lambda _: _run_live_escalation())
                             number_input.on(
                                 "update:model-value",
-                                lambda e, s=slider: s.set_value(int(float(e.args)))
+                                lambda e, s=slider: s.set_value(float(e.args))
                                 if e.args not in (None, "") else None,
                             )
-                            number_input.on("blur", lambda _: _run_live_escalation())
 
                             is_unknown = (
-                                str(effective_answer).strip().lower() == "unbekannt"
+                                is_unknown
+                                or str(effective_answer).strip().lower() == "unbekannt"
                             )
                             unknown_checkbox = ui.checkbox(
                                 "unbekannt", value=is_unknown
                             )
                             _set_unknown_state(is_unknown, slider, number_input)
                             unknown_checkbox.on_value_change(
-                                lambda e, s=slider, inp=number_input: (
-                                    _set_unknown_state(e.value, s, inp),
-                                    _refresh_visibility(),
-                                    _run_live_escalation(),
+                                lambda e, s=slider, inp=number_input, answer_key=key: (
+                                    _handle_unknown_vital_change(
+                                        bool(e.value),
+                                        "pulse" if answer_key == "puls" else "weight",
+                                        answer_key,
+                                        s,
+                                        inp,
+                                    )
+                                    if answer_key in ("puls", "gewicht", "gewicht_aktuell")
+                                    else (
+                                        _set_unknown_state(e.value, s, inp),
+                                        _refresh_visibility(),
+                                        _run_live_escalation(),
+                                    )
                                 )
                             )
 
@@ -2694,17 +2850,31 @@ def _build_question_form(
                                 "Ausgewählt: manuelle Eingabe"
                             ).classes("text-sm font-medium text-[#0f766e]")
                             fields[key].source_label = source_label
-                            fields[key].measurement_source = "manuell eingegeben"
+                            vital_source_key = (
+                                "gewicht" if key in ("gewicht", "gewicht_aktuell") else key
+                            )
+                            fields[key].measurement_source = prefilled_vital_sources.get(
+                                vital_source_key, "manuell eingegeben"
+                            )
+                            _set_field_source(fields[key], fields[key].measurement_source)
                             slider.on(
-                                "update:model-value",
-                                lambda _, field=fields[key]: _set_field_source(
-                                    field, "manuell eingegeben"
+                                "change",
+                                lambda _, field=fields[key], answer_key=key: (
+                                    _mark_manual_vital(
+                                        "pulse" if answer_key == "puls" else "weight",
+                                        field,
+                                    ),
+                                    _run_live_escalation(),
                                 ),
                             )
                             number_input.on(
-                                "update:model-value",
-                                lambda _, field=fields[key]: _set_field_source(
-                                    field, "manuell eingegeben"
+                                "blur",
+                                lambda _, field=fields[key], answer_key=key: (
+                                    _mark_manual_vital(
+                                        "pulse" if answer_key == "puls" else "weight",
+                                        field,
+                                    ),
+                                    _run_live_escalation(),
                                 ),
                             )
                             if key == "puls":
@@ -2839,6 +3009,7 @@ def _do_reset_session(session: BrowserSession) -> None:
     session.critical_confirmation_open = False
     session.guided_started = False
     session.prefilled_answers.clear()
+    session.ai_prefilled_keys.clear()
     session.stage = "staff_selection" if session.is_personal_mode else "scenario"
 
 
@@ -3283,6 +3454,7 @@ def _render_symptom_chat(
                 loading_dialog.close()
 
             session.prefilled_answers = prefilled
+            session.ai_prefilled_keys = set(prefilled)
             session.chat_phase_done = True
             if prefilled:
                 ui.notify(
@@ -3302,6 +3474,7 @@ def _render_symptom_chat(
 
         def _on_skip() -> None:
             session.prefilled_answers = {}
+            session.ai_prefilled_keys.clear()
             session.chat_phase_done = True
             refresh_ui()
 
@@ -3419,6 +3592,139 @@ def _begin_guided_questions(session: BrowserSession) -> None:
             ctrl.begin_anamnesis(session.prefilled_answers)
 
 
+def _device_prefilled_answers(session: BrowserSession) -> dict[str, str]:
+    prefilled: dict[str, str] = {}
+    if session.simulated_bp:
+        prefilled["blutdruck_systolisch"] = str(session.simulated_bp["systolisch"])
+        prefilled["blutdruck_diastolisch"] = str(session.simulated_bp["diastolisch"])
+    if session.simulated_weight:
+        weight = session.simulated_weight.get("gewicht")
+        if weight is not None:
+            prefilled["gewicht"] = str(weight)
+            prefilled["gewicht_aktuell"] = str(weight)
+    if session.simulated_oximeter:
+        pulse = session.simulated_oximeter.get("puls")
+        if pulse is not None:
+            prefilled["puls"] = str(pulse)
+    return prefilled
+
+
+def _merged_prefilled_answers(session: BrowserSession) -> dict[str, str]:
+    merged = dict(session.prefilled_answers)
+    merged.update(_device_prefilled_answers(session))
+    return merged
+
+
+def _device_prefilled_sources(session: BrowserSession) -> dict[str, str]:
+    sources: dict[str, str] = {}
+    if session.simulated_bp:
+        sources["systolisch"] = "simuliert"
+        sources["diastolisch"] = "simuliert"
+    if session.simulated_weight:
+        sources["gewicht"] = "simuliert"
+    if session.simulated_oximeter and session.simulated_oximeter.get("puls") is not None:
+        sources["puls"] = "simuliert"
+    return sources
+
+
+def _update_simulator_state_from_form(
+    session: BrowserSession,
+    kind: str,
+    values: dict,
+) -> None:
+    controllers = session.controllers or ([session.controller] if session.controller else [])
+    if kind == "blood_pressure":
+        session.simulated_bp = values
+        vital_values = {
+            "systolisch": values["systolisch"],
+            "diastolisch": values["diastolisch"],
+        }
+    elif kind == "weight":
+        session.simulated_weight = values
+        vital_values = {"gewicht": values["gewicht"]}
+    elif kind == "pulse":
+        session.simulated_oximeter = {"puls": values["puls"]}
+        vital_values = {"puls": values["puls"]}
+    else:
+        return
+
+    for controller in controllers:
+        if controller is not None:
+            controller.record_vitals(vital_values, "simuliert")
+
+
+def _number_from_answer(value: str | None) -> float | None:
+    if value is None:
+        return None
+    value = str(value).strip().replace(",", ".")
+    if not value or value.lower() in ("unbekannt", "nicht gemessen"):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _clear_simulator_state_for_manual_input(
+    session: BrowserSession,
+    kind: str,
+    answers: dict[str, str],
+) -> None:
+    controllers = session.controllers or ([session.controller] if session.controller else [])
+
+    if kind == "blood_pressure":
+        session.simulated_bp = None
+        for answer_key in ("blutdruck_systolisch", "blutdruck_diastolisch"):
+            if answer_key in answers:
+                session.prefilled_answers[answer_key] = answers[answer_key]
+        systolic = _number_from_answer(answers.get("blutdruck_systolisch"))
+        diastolic = _number_from_answer(answers.get("blutdruck_diastolisch"))
+        if systolic is None or diastolic is None:
+            for controller in controllers:
+                if controller is not None:
+                    controller.clear_vitals(("systolisch", "diastolisch"))
+            return
+        for controller in controllers:
+            if controller is not None:
+                controller.record_vitals(
+                    {"systolisch": systolic, "diastolisch": diastolic},
+                    "manuell eingegeben",
+                )
+        return
+
+    if kind == "weight":
+        session.simulated_weight = None
+        for answer_key in ("gewicht", "gewicht_aktuell"):
+            if answer_key in answers:
+                session.prefilled_answers[answer_key] = answers[answer_key]
+        weight = _number_from_answer(
+            answers.get("gewicht_aktuell") or answers.get("gewicht")
+        )
+        if weight is None:
+            for controller in controllers:
+                if controller is not None:
+                    controller.clear_vitals(("gewicht",))
+            return
+        for controller in controllers:
+            if controller is not None:
+                controller.record_vitals({"gewicht": weight}, "manuell eingegeben")
+        return
+
+    if kind == "pulse":
+        session.simulated_oximeter = None
+        if "puls" in answers:
+            session.prefilled_answers["puls"] = answers["puls"]
+        pulse = _number_from_answer(answers.get("puls"))
+        if pulse is None:
+            for controller in controllers:
+                if controller is not None:
+                    controller.clear_vitals(("puls",))
+            return
+        for controller in controllers:
+            if controller is not None:
+                controller.record_vitals({"puls": pulse}, "manuell eingegeben")
+
+
 def _render_mass_anamnesis_single(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
@@ -3467,10 +3773,20 @@ def _render_mass_anamnesis_single(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
-        prefilled=session.prefilled_answers,
+        prefilled=_merged_prefilled_answers(session),
         live_escalation_callback=lambda answers: _check_live_form_escalation(
             session, [ctrl], answers, refresh_ui
         ),
+        simulator_update_callback=lambda kind, values: (
+            _update_simulator_state_from_form(session, kind, values),
+            refresh_ui(),
+        ),
+        manual_vital_callback=lambda kind, answers: (
+            _clear_simulator_state_for_manual_input(session, kind, answers),
+            refresh_ui(),
+        ),
+        prefilled_vital_sources=_device_prefilled_sources(session),
+        ai_prefilled_keys=session.ai_prefilled_keys,
     )
 
 
@@ -3567,10 +3883,20 @@ def _render_mass_anamnesis_multi(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
-        prefilled=session.prefilled_answers,
+        prefilled=_merged_prefilled_answers(session),
         live_escalation_callback=lambda answers: _check_live_form_escalation(
             session, controllers, answers, refresh_ui
         ),
+        simulator_update_callback=lambda kind, values: (
+            _update_simulator_state_from_form(session, kind, values),
+            refresh_ui(),
+        ),
+        manual_vital_callback=lambda kind, answers: (
+            _clear_simulator_state_for_manual_input(session, kind, answers),
+            refresh_ui(),
+        ),
+        prefilled_vital_sources=_device_prefilled_sources(session),
+        ai_prefilled_keys=session.ai_prefilled_keys,
     )
 
 
@@ -3604,6 +3930,17 @@ def _render_answer_editor(
         submit_callback=_on_submit,
         cancel_callback=lambda: _cancel_editing(session, refresh_ui),
         live_visibility=True,
+        prefilled=_device_prefilled_answers(session),
+        simulator_update_callback=lambda kind, values: (
+            _update_simulator_state_from_form(session, kind, values),
+            refresh_ui(),
+        ),
+        manual_vital_callback=lambda kind, answers: (
+            _clear_simulator_state_for_manual_input(session, kind, answers),
+            refresh_ui(),
+        ),
+        prefilled_vital_sources=_device_prefilled_sources(session),
+        ai_prefilled_keys=session.ai_prefilled_keys,
     )
 
 
@@ -3654,7 +3991,7 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
 
     _render_avatar(session, refresh_ui)
 
-    if ctrl is not None and ctrl.state.value >= DialogueState.ANAMNESIS.value:
+    if ctrl is not None and session.current_patient is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
             ui.label("Gerätesimulatoren").classes("eyebrow")
 
@@ -3688,10 +4025,13 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                               on_click=lambda: _simulate_oximeter(session, refresh_ui)
                               ).props("dense outline")
                 if session.simulated_oximeter:
-                    ui.label(
-                        f"SpO\u2082: {session.simulated_oximeter['spo2']}%, "
-                        f"Puls: {session.simulated_oximeter['puls']} bpm"
-                    ).classes("text-sm text-slate-600 ml-2")
+                    spo2 = session.simulated_oximeter.get("spo2")
+                    pulse = session.simulated_oximeter.get("puls")
+                    if spo2 is not None:
+                        oximeter_text = f"SpO\u2082: {spo2}%, Puls: {pulse} bpm"
+                    else:
+                        oximeter_text = f"Puls: {pulse} bpm"
+                    ui.label(oximeter_text).classes("text-sm text-slate-600 ml-2")
 
     if ctrl is not None and ctrl.export_path is not None:
         with ui.card().classes("surface-card w-full shadow-none"):

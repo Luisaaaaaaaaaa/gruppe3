@@ -40,6 +40,11 @@ from app.scenarios.hypertension_scenario import (
 
 MED_PREFIX = "med_adhaerenz_"
 MED_REASON_PREFIX = "med_adhaerenz_grund_"
+DAILY_MED_PREFIX = "med_dauer_einnahme_"
+DAILY_MED_CHANGE_PREFIX = "med_dauer_aenderung_"
+AS_NEEDED_MED_PREFIX = "med_bedarf_einnahme_"
+AS_NEEDED_REASON_PREFIX = "med_bedarf_grund_"
+ADDITIONAL_MEDICATIONS_PRESENT_KEY = "weitere_medikamente_vorhanden"
 ADDITIONAL_MEDICATIONS_KEY = "weitere_medikamente"
 
 SCENARIO_MAP: dict[str, str] = {
@@ -78,6 +83,22 @@ def _risikofaktor_frage(rf: str) -> str | None:
         return None
 
     return f"Besteht {rf} weiterhin?"
+
+
+def _parse_medication_detail(detail: str) -> tuple[str, str, str]:
+    section = "Dauermedikation"
+    label = detail.strip()
+    dosage = ""
+
+    if ": " in label:
+        raw_section, label = label.split(": ", 1)
+        if raw_section.strip().lower().startswith("bedarf"):
+            section = "Bedarfsmedikation"
+
+    if " - " in label:
+        label, dosage = label.rsplit(" - ", 1)
+
+    return section, label.strip(), dosage.strip()
 
 
 class DialogueController:
@@ -132,43 +153,96 @@ class DialogueController:
     def _medication_questions(self) -> list[AnamnesisQuestion]:
         questions: list[AnamnesisQuestion] = []
 
-        detail_map: dict[str, str] = {}
-        for med_name in self._patient.medications:
+        medication_entries: list[dict[str, str]] = []
+        for idx, med_name in enumerate(self._patient.medications):
             name_lower = med_name.lower()
             for detail in self._patient.details.medication_details:
                 if name_lower in detail.lower():
-                    detail_map[med_name] = detail
+                    detail_text = detail
                     break
             else:
-                detail_map[med_name] = med_name
+                detail_text = med_name
 
-        for idx, med_name in enumerate(self._patient.medications):
-            med_text = detail_map[med_name]
+            section, preparation, dosage = _parse_medication_detail(detail_text)
+            medication_entries.append({
+                "idx": str(idx),
+                "section": section,
+                "preparation": preparation,
+                "dosage": dosage,
+            })
+
+        intro = "Ich gehe kurz Ihre Medikamente aus der Akte mit Ihnen durch.\n\n"
+        for entry_index, entry in enumerate(medication_entries):
+            idx = entry["idx"]
+            section = entry["section"]
+            preparation = entry["preparation"]
+            dosage = entry["dosage"]
+            dosage_text = f", Dosierung {dosage}," if dosage else ","
+            intro_text = intro if entry_index == 0 else ""
+
+            if section == "Bedarfsmedikation":
+                questions.append(
+                    AnamnesisQuestion(
+                        key=f"{AS_NEEDED_MED_PREFIX}{idx}",
+                        text=(
+                            f"{intro_text}Als Bedarfsmedikation ist {preparation}"
+                            f"{dosage_text} vermerkt. Haben Sie dieses Präparat "
+                            "in letzter Zeit eingenommen?"
+                        ),
+                        input_type="ja_nein",
+                    )
+                )
+                questions.append(
+                    AnamnesisQuestion(
+                        key=f"{AS_NEEDED_REASON_PREFIX}{idx}",
+                        text="Aus welchem Grund haben Sie es eingenommen?",
+                        input_type="freitext",
+                        required=False,
+                    )
+                )
+                continue
+
             questions.append(
                 AnamnesisQuestion(
-                    key=f"{MED_PREFIX}{idx}",
-                    text=f"Nehmen Sie {med_text} so ein, wie es Ihnen verschrieben wurde?",
+                    key=f"{DAILY_MED_PREFIX}{idx}",
+                    text=(
+                        f"{intro_text}Als Dauermedikation ist {preparation}"
+                        f"{dosage_text} vermerkt. Nehmen Sie dieses Präparat "
+                        "aktuell so ein?"
+                    ),
                     input_type="ja_nein",
                 )
             )
             questions.append(
                 AnamnesisQuestion(
-                    key=f"{MED_REASON_PREFIX}{idx}",
-                    text="Warum nicht?",
+                    key=f"{DAILY_MED_CHANGE_PREFIX}{idx}",
+                    text=(
+                        "Was hat sich geändert? Bitte nennen Sie kurz den Grund, "
+                        "zum Beispiel Nebenwirkungen, vergessen, Vorrat leer, "
+                        "selbst abgesetzt oder ärztlich geändert."
+                    ),
                     input_type="freitext",
                     required=False,
                 )
             )
         questions.append(
             AnamnesisQuestion(
-                key=ADDITIONAL_MEDICATIONS_KEY,
+                key=ADDITIONAL_MEDICATIONS_PRESENT_KEY,
                 text=(
-                    "Nehmen Sie weitere Medikamente, die nicht in Ihrer Akte stehen? "
-                    "Denken Sie auch an frei gekaufte Mittel und Medikamente, die Sie "
-                    "nur gelegentlich oder wegen Ihrer aktuellen Beschwerden genommen "
-                    "haben. Bitte nennen Sie Name, Häufigkeit und Grund oder schreiben Sie 'keine'."
+                    "Nehmen Sie zusätzlich Medikamente, die nicht in Ihrer Akte "
+                    "stehen? Denken Sie auch an frei gekaufte Mittel, pflanzliche "
+                    "Präparate, Schmerzmittel, Nasensprays, Nahrungsergänzungsmittel "
+                    "oder Medikamente, die Sie nur gelegentlich nehmen."
                 ),
+                input_type="ja_nein",
+            )
+        )
+        questions.append(
+            AnamnesisQuestion(
+                key=ADDITIONAL_MEDICATIONS_KEY,
+                text="Bitte nennen Sie Name, wie oft Sie es nehmen und wofür.",
                 input_type="freitext",
+                required=False,
             )
         )
         return questions
@@ -252,7 +326,13 @@ class DialogueController:
         #    wenn Akten-Daten vorhanden sind)
         for q in scenario_qs[1:]:
             if hat_akten_daten and q.key in akten_keys:
-                continue
+                # Szenario C fordert laut SET explizit die Frage nach bekannten
+                # Vorerkrankungen; Aktenhinweise ersetzen sie dort nicht.
+                if not (
+                    self._scenario_id == "hypertension"
+                    and q.key == "vorerkrankungen"
+                ):
+                    continue
             questions.append(q)
 
         # 4. Medikamenten-Fragen
@@ -468,6 +548,21 @@ class DialogueController:
             adhaerenz_key = f"{MED_PREFIX}{idx}"
             return (answers.get(adhaerenz_key) or "").strip().lower() in ("nein", "n", "no")
 
+        if question_key.startswith(DAILY_MED_CHANGE_PREFIX):
+            idx = question_key[len(DAILY_MED_CHANGE_PREFIX):]
+            intake_key = f"{DAILY_MED_PREFIX}{idx}"
+            return (answers.get(intake_key) or "").strip().lower() in ("nein", "n", "no")
+
+        if question_key.startswith(AS_NEEDED_REASON_PREFIX):
+            idx = question_key[len(AS_NEEDED_REASON_PREFIX):]
+            intake_key = f"{AS_NEEDED_MED_PREFIX}{idx}"
+            return (answers.get(intake_key) or "").strip().lower() in ("ja", "j", "yes", "y")
+
+        if question_key == ADDITIONAL_MEDICATIONS_KEY:
+            return (answers.get(ADDITIONAL_MEDICATIONS_PRESENT_KEY) or "").strip().lower() in (
+                "ja", "j", "yes", "y",
+            )
+
         if self._scenario_id == "cough":
             follow_ups = {
                 "auswurf_farbe": "auswurf",
@@ -559,6 +654,13 @@ class DialogueController:
 
         self._answers[question.key] = answer.strip()
         log_answer(question.key, answer.strip())
+
+        if (
+            question.key == ADDITIONAL_MEDICATIONS_PRESENT_KEY
+            and answer.strip().lower() in ("nein", "n", "no")
+        ):
+            self._display("Dann sind keine weiteren Medikamente angegeben.")
+
         self._current_question_index += 1
 
         if self._escalate_critical_acute_answers():
@@ -572,7 +674,8 @@ class DialogueController:
         vital_sources: dict[str, str] | None = None,
     ) -> None:
         if vital_sources is not None:
-            self._vital_sources = dict(vital_sources)
+            self._vital_sources.update(vital_sources)
+        self._apply_answer_vitals(answers, vital_sources or {})
         for q in self._questions:
             value = answers.get(q.key, "").strip()
             if q.required and self.is_question_visible(q.key, answers) and not value:
@@ -663,6 +766,48 @@ class DialogueController:
         for key in values:
             self._vital_sources[key] = source
         self._refresh_vitals_source()
+
+    def clear_vitals(self, keys: list[str] | tuple[str, ...] | set[str]) -> None:
+        """Entfernt Messwerte, wenn sie im aktuellen Ablauf nicht mehr erhoben sind."""
+        for key in keys:
+            self._vitals.pop(key, None)
+            self._vital_sources.pop(key, None)
+        self._refresh_vitals_source()
+
+    def _apply_answer_vitals(
+        self,
+        answers: dict[str, str],
+        vital_sources: dict[str, str],
+    ) -> None:
+        if "blutdruck_systolisch" in answers or "blutdruck_diastolisch" in answers:
+            systolic = _extract_number(answers.get("blutdruck_systolisch", ""))
+            diastolic = _extract_number(answers.get("blutdruck_diastolisch", ""))
+            if systolic is None or diastolic is None:
+                self.clear_vitals(("systolisch", "diastolisch"))
+            else:
+                self.record_vitals(
+                    {"systolisch": systolic, "diastolisch": diastolic},
+                    vital_sources.get("systolisch", "manuell eingegeben"),
+                )
+
+        answer_vitals = {
+            "puls": "puls",
+            "gewicht": "gewicht",
+            "gewicht_aktuell": "gewicht",
+            "korpertemperatur": "temperatur",
+            "atemfrequenz": "atemfrequenz",
+        }
+        for answer_key, vital_key in answer_vitals.items():
+            if answer_key not in answers:
+                continue
+            value = _extract_number(answers.get(answer_key, ""))
+            if value is None:
+                self.clear_vitals((vital_key,))
+                continue
+            self.record_vitals(
+                {vital_key: value},
+                vital_sources.get(vital_key, "manuell eingegeben"),
+            )
 
     def _refresh_vitals_source(self) -> None:
         sources = list(dict.fromkeys(self._vital_sources.values()))
@@ -886,9 +1031,10 @@ class DialogueController:
     ) -> None:
         if vital_sources is not None:
             self._vital_sources.update(vital_sources)
+        self._apply_answer_vitals(answers, vital_sources or {})
         for q in self._questions:
             value = answers.get(q.key, "").strip()
-            if q.required and not value:
+            if q.required and self.is_question_visible(q.key, answers) and not value:
                 raise ValueError(
                     f"Die Frage '{q.text}' ist erforderlich."
                 )
@@ -904,6 +1050,18 @@ class DialogueController:
         self._summary = None
         self._build_and_export_summary()
 
+    def _open_points(self) -> list[str]:
+        open_points: list[str] = []
+        for question in self._questions:
+            if not question.required:
+                continue
+            if not self.is_question_visible(question.key, self._answers):
+                continue
+            value = (self._answers.get(question.key) or "").strip()
+            if not value or value.lower() == "unbekannt":
+                open_points.append(f"Angabe zu '{question.text}' fehlt oder ist unbekannt.")
+        return open_points
+
     def _build_and_export_summary(self) -> None:
         if self._summary is not None:
             return
@@ -916,6 +1074,7 @@ class DialogueController:
             vitals_source=self._vitals_source,
             vital_sources=self._vital_sources,
             red_flags=self._red_flags,
+            open_points=self._open_points(),
         )
 
         self._export_path = export_summary(self._summary)

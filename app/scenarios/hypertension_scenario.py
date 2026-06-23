@@ -170,7 +170,7 @@ QUESTIONS: list[AnamnesisQuestion] = [
         input_type="zahl",
         slider_min=30,
         slider_max=300,
-        slider_step=1,
+        slider_step=0.1,
     ),
     AnamnesisQuestion(
         key="gewicht_messen",
