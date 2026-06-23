@@ -577,6 +577,7 @@ class BrowserSession:
     simulated_oximeter: dict | None = None
     spoken_message_count: int = 0
     staff_search_query: str = ""
+    critical_confirmation_open: bool = False
 
     def reset(self) -> None:
         self.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
@@ -607,6 +608,7 @@ class BrowserSession:
         self.simulated_oximeter = None
         self.spoken_message_count = 0
         self.staff_search_query = ""
+        self.critical_confirmation_open = False
 
     @property
     def primary_controller(self) -> DialogueController | None:
@@ -630,16 +632,20 @@ class BrowserSession:
 class _SliderField:
     slider: ui.slider
     unknown_checkbox: ui.checkbox
-    value_label: ui.label
+    number_input: ui.number
     min_val: float
     max_val: float
     step: float
+    info_label: ui.label | None = None
 
     @property
     def value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
-        return str(int(self.slider.value))
+        value = self.number_input.value
+        if value in (None, ""):
+            return ""
+        return str(int(float(value)))
 
 
 @dataclass
@@ -650,28 +656,34 @@ class _DummyField:
 @dataclass
 class _BloodPressureField:
     sys_slider: ui.slider
-    sys_label: ui.label
+    sys_input: ui.number
     dia_slider: ui.slider
-    dia_label: ui.label
+    dia_input: ui.number
     unknown_checkbox: ui.checkbox
 
     @property
     def value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
-        return f"{int(self.sys_slider.value)}/{int(self.dia_slider.value)}"
+        if self.sys_input.value in (None, "") or self.dia_input.value in (None, ""):
+            return ""
+        return f"{int(float(self.sys_input.value))}/{int(float(self.dia_input.value))}"
 
     @property
     def sys_value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
-        return str(int(self.sys_slider.value))
+        if self.sys_input.value in (None, ""):
+            return ""
+        return str(int(float(self.sys_input.value)))
 
     @property
     def dia_value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
-        return str(int(self.dia_slider.value))
+        if self.dia_input.value in (None, ""):
+            return ""
+        return str(int(float(self.dia_input.value)))
 
 
 def _classify_message(text: str) -> str:
@@ -1347,6 +1359,7 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             session.attempts_left = result.attempts_left
 
             if result.success:
+                _dismiss_critical_warning()
                 session.current_patient = result.patient
                 if session.is_personal_mode and session.selected_scenarios:
                     _start_scenarios(session, session.selected_scenarios, refresh_ui)
@@ -1367,7 +1380,9 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                     on_click=lambda: _back_to_staff_selection(session, refresh_ui),
                 ).props("outline")
             else:
-                ui.button("Zurücksetzen", on_click=lambda: (session.reset(), refresh_ui())).props(
+                ui.button("Zurücksetzen", on_click=lambda: _reset_browser_session(
+                    session, refresh_ui
+                )).props(
                     "outline"
                 )
             ui.button("Anmelden", on_click=submit_login).props("unelevated").classes(
@@ -1386,6 +1401,7 @@ def _get_recommended_scenario_key(
 def _back_to_staff_selection(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
+    _dismiss_critical_warning()
     session.stage = "staff_selection"
     session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
     session.attempts_left = MAX_ATTEMPTS
@@ -1393,6 +1409,14 @@ def _back_to_staff_selection(
     session.login_tone = "tone-info"
     session.current_patient = None
     session.selected_scenarios.clear()
+    refresh_ui()
+
+
+def _reset_browser_session(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    _dismiss_critical_warning()
+    session.reset()
     refresh_ui()
 
 
@@ -1484,6 +1508,8 @@ def _select_patient_for_personal_mode(
     session: BrowserSession, patient: PatientRecord, refresh_ui: Callable[[], None]
 ) -> None:
     previous_id = session.current_patient.patient_id if session.current_patient else None
+    if previous_id != patient.patient_id:
+        _dismiss_critical_warning()
     session.current_patient = patient
     if previous_id != patient.patient_id:
         recommended_ui_key = _get_recommended_scenario_ui_key(patient)
@@ -1983,7 +2009,7 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
             )
             ui.button(
                 "Zur Anmeldung zurückkehren",
-                on_click=lambda: (session.reset(), refresh_ui()),
+                on_click=lambda: _reset_browser_session(session, refresh_ui),
             ).props("outline")
         return
 
@@ -2172,15 +2198,25 @@ def _set_field_source(field: object, source: str) -> None:
         label.set_text(f"Ausgewählt: {display_source}")
 
 
+def _set_unknown_state(is_unknown: bool | None, *controls: object) -> None:
+    """Keep all controls in sync with an ``unbekannt`` checkbox."""
+    for control in controls:
+        if is_unknown:
+            control.disable()
+        else:
+            control.enable()
+
+
 def _simulate_pulse(fields: dict[str, object]) -> None:
     puls_field = fields.get("puls")
     if not isinstance(puls_field, _SliderField):
         return
     simulated = Simulator.simuliere_puls()
-    puls_field.slider.value = simulated
-    puls_field.value_label.set_text(f"Wert: {simulated}")
-    puls_field.unknown_checkbox.value = False
     puls_field.slider.enable()
+    puls_field.number_input.enable()
+    puls_field.unknown_checkbox.set_value(False)
+    puls_field.slider.set_value(simulated)
+    puls_field.number_input.set_value(simulated)
     _set_field_source(puls_field, "simuliert")
 
 
@@ -2189,18 +2225,22 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> None:
     if not isinstance(bp_field, _BloodPressureField):
         return
     bp = Simulator.simuliere_blutdruck()
-    bp_field.sys_slider.value = bp["systolisch"]
-    bp_field.sys_label.set_text(f"Systolisch: {bp['systolisch']}")
-    bp_field.dia_slider.value = bp["diastolisch"]
-    bp_field.dia_label.set_text(f"Diastolisch: {bp['diastolisch']}")
-    bp_field.unknown_checkbox.value = False
+    bp_field.unknown_checkbox.set_value(False)
+    bp_field.sys_slider.set_value(bp["systolisch"])
+    bp_field.sys_input.set_value(bp["systolisch"])
+    bp_field.dia_slider.set_value(bp["diastolisch"])
+    bp_field.dia_input.set_value(bp["diastolisch"])
     bp_field.sys_slider.enable()
+    bp_field.sys_input.enable()
     bp_field.dia_slider.enable()
+    bp_field.dia_input.enable()
     _set_field_source(bp_field, "simuliert")
 
 
 def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueController) -> None:
-    weight_field = fields.get("gewicht") or fields.get("gewicht_aktuell")
+    weight_field = fields.get("gewicht")
+    if weight_field is None:
+        weight_field = fields.get("gewicht_aktuell")
     if not isinstance(weight_field, _SliderField):
         return
     patient = controller.get_patient()
@@ -2213,10 +2253,13 @@ def _simulate_weight_in_form(fields: dict[str, object], controller: DialogueCont
     simulated = result["gewicht"]
     bmi = result["bmi"]
     klasse = result["klasse"]
-    weight_field.slider.value = simulated
-    weight_field.value_label.set_text(f"Wert: {int(simulated)} kg (BMI: {bmi}, {klasse})")
-    weight_field.unknown_checkbox.value = False
     weight_field.slider.enable()
+    weight_field.number_input.enable()
+    weight_field.unknown_checkbox.set_value(False)
+    weight_field.slider.set_value(simulated)
+    weight_field.number_input.set_value(simulated)
+    if weight_field.info_label is not None:
+        weight_field.info_label.set_text(f"BMI: {bmi} ({klasse})")
     _set_field_source(weight_field, "simuliert")
 
 
@@ -2363,44 +2406,60 @@ def _build_question_form(
                             sys_slider = ui.slider(
                                 min=80, max=250, step=1, value=120
                             ).classes("w-full")
-                            sys_label = ui.label("Oberer Wert: 120").classes(
-                                "text-sm font-medium"
+                            sys_input = ui.number(
+                                "Oberer Wert", value=120, min=80, max=250, step=1
+                            ).props("outlined").classes(
+                                "w-full sm:max-w-[220px]"
                             )
                             sys_slider.on(
                                 "update:model-value",
-                                lambda e, lbl=sys_label: (
-                                    lbl.set_text(f"Oberer Wert: {int(float(e.args))}"),
-                                    _run_live_escalation(),
-                                ),
+                                lambda e: sys_input.set_value(int(float(e.args))),
                             )
+                            sys_slider.on("change", lambda _: _run_live_escalation())
+                            sys_input.on(
+                                "update:model-value",
+                                lambda e: sys_slider.set_value(int(float(e.args)))
+                                if e.args not in (None, "") else None,
+                            )
+                            sys_input.on("blur", lambda _: _run_live_escalation())
                         with ui.column().classes("w-full gap-1"):
                             dia_slider = ui.slider(
                                 min=40, max=150, step=1, value=80
                             ).classes("w-full")
-                            dia_label = ui.label("Unterer Wert: 80").classes(
-                                "text-sm font-medium"
+                            dia_input = ui.number(
+                                "Unterer Wert", value=80, min=40, max=150, step=1
+                            ).props("outlined").classes(
+                                "w-full sm:max-w-[220px]"
                             )
                             dia_slider.on(
                                 "update:model-value",
-                                lambda e, lbl=dia_label: (
-                                    lbl.set_text(f"Unterer Wert: {int(float(e.args))}"),
-                                    _run_live_escalation(),
-                                ),
+                                lambda e: dia_input.set_value(int(float(e.args))),
                             )
-                        unknown_checkbox = ui.checkbox("unbekannt")
-                        unknown_checkbox.on(
-                            "update:model-value",
-                            lambda e: (
-                                sys_slider.disable() if e.args else sys_slider.enable(),
-                                dia_slider.disable() if e.args else dia_slider.enable(),
-                            ),
+                            dia_slider.on("change", lambda _: _run_live_escalation())
+                            dia_input.on(
+                                "update:model-value",
+                                lambda e: dia_slider.set_value(int(float(e.args)))
+                                if e.args not in (None, "") else None,
+                            )
+                            dia_input.on("blur", lambda _: _run_live_escalation())
+                        is_unknown = str(effective_answer).strip().lower() == "unbekannt"
+                        unknown_checkbox = ui.checkbox(
+                            "unbekannt", value=is_unknown
                         )
-                        unknown_checkbox.on(
-                            "update:model-value",
-                            lambda _: (_refresh_visibility(), _run_live_escalation()),
+                        _set_unknown_state(
+                            is_unknown, sys_slider, sys_input, dia_slider, dia_input
+                        )
+                        unknown_checkbox.on_value_change(
+                            lambda e: (
+                                _set_unknown_state(
+                                    e.value, sys_slider, sys_input, dia_slider, dia_input
+                                ),
+                                _refresh_visibility(),
+                                _run_live_escalation(),
+                            )
                         )
                 fields[key] = _BloodPressureField(
-                    sys_slider, sys_label, dia_slider, dia_label, unknown_checkbox
+                    sys_slider, sys_input, dia_slider, dia_input, unknown_checkbox
                 )
                 source_label = ui.label(
                     "Ausgewählt: manuelle Eingabe"
@@ -2412,6 +2471,14 @@ def _build_question_form(
                     lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
                 )
                 dia_slider.on(
+                    "update:model-value",
+                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                )
+                sys_input.on(
+                    "update:model-value",
+                    lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
+                )
+                dia_input.on(
                     "update:model-value",
                     lambda _, field=fields[key]: _set_field_source(field, "manuell eingegeben"),
                 )
@@ -2467,32 +2534,51 @@ def _build_question_form(
                             slider = ui.slider(
                                 min=min_val, max=max_val, step=step, value=init_val
                             ).classes("w-full")
-                            value_label = ui.label(f"Wert: {int(init_val)}").classes(
-                                "text-sm font-medium text-center"
+                            number_input = ui.number(
+                                "Messwert",
+                                value=int(init_val),
+                                min=min_val,
+                                max=max_val,
+                                step=step,
+                            ).props("outlined").classes(
+                                "w-full sm:max-w-[220px]"
                             )
                             slider.on(
                                 "update:model-value",
-                                lambda e, lbl=value_label: (
-                                    lbl.set_text(f"Wert: {int(float(e.args))}"),
-                                    _run_live_escalation(),
+                                lambda e, inp=number_input: inp.set_value(
+                                    int(float(e.args))
                                 ),
                             )
+                            slider.on("change", lambda _: _run_live_escalation())
+                            number_input.on(
+                                "update:model-value",
+                                lambda e, s=slider: s.set_value(int(float(e.args)))
+                                if e.args not in (None, "") else None,
+                            )
+                            number_input.on("blur", lambda _: _run_live_escalation())
 
-                            unknown_checkbox = ui.checkbox("unbekannt")
-                            unknown_checkbox.on(
-                                "update:model-value",
-                                lambda e, s=slider: (
-                                    s.disable() if e.args else s.enable()
-                                ),
+                            is_unknown = (
+                                str(effective_answer).strip().lower() == "unbekannt"
                             )
-                            unknown_checkbox.on(
-                                "update:model-value",
-                                lambda _: (_refresh_visibility(), _run_live_escalation()),
+                            unknown_checkbox = ui.checkbox(
+                                "unbekannt", value=is_unknown
+                            )
+                            _set_unknown_state(is_unknown, slider, number_input)
+                            unknown_checkbox.on_value_change(
+                                lambda e, s=slider, inp=number_input: (
+                                    _set_unknown_state(e.value, s, inp),
+                                    _refresh_visibility(),
+                                    _run_live_escalation(),
+                                )
                             )
 
                         fields[key] = _SliderField(
-                            slider, unknown_checkbox, value_label, min_val, max_val, step
+                            slider, unknown_checkbox, number_input, min_val, max_val, step
                         )
+                        if key in ("gewicht", "gewicht_aktuell"):
+                            fields[key].info_label = ui.label("").classes(
+                                "text-sm font-medium text-slate-600"
+                            )
                         if key in ("puls", "gewicht", "gewicht_aktuell"):
                             source_label = ui.label(
                                 "Ausgewählt: manuelle Eingabe"
@@ -2500,6 +2586,12 @@ def _build_question_form(
                             fields[key].source_label = source_label
                             fields[key].measurement_source = "manuell eingegeben"
                             slider.on(
+                                "update:model-value",
+                                lambda _, field=fields[key]: _set_field_source(
+                                    field, "manuell eingegeben"
+                                ),
+                            )
+                            number_input.on(
                                 "update:model-value",
                                 lambda _, field=fields[key]: _set_field_source(
                                     field, "manuell eingegeben"
@@ -2575,6 +2667,8 @@ def _build_question_form(
                 )
                 return
             collected = _collect_values()
+            if _run_live_escalation():
+                return
             submit_callback(collected, _collect_vital_sources())
 
         with ui.row().classes("w-full justify-end gap-3"):
@@ -2624,6 +2718,7 @@ def _render_cancel_overlay(
 
 
 def _do_reset_session(session: BrowserSession) -> None:
+    _dismiss_critical_warning()
     session.controller = None
     session.controllers.clear()
     session.selected_scenarios.clear()
@@ -2631,6 +2726,7 @@ def _do_reset_session(session: BrowserSession) -> None:
     session.pending_input = None
     session.anamnesis_mode = None
     session.chat_phase_done = False
+    session.critical_confirmation_open = False
     session.guided_started = False
     session.prefilled_answers.clear()
     session.stage = "staff_selection" if session.is_personal_mode else "scenario"
@@ -3127,24 +3223,72 @@ def _check_live_form_escalation(
     refresh_ui: Callable[[], None],
     vitals: dict[str, int | float] | None = None,
 ) -> bool:
-    """Beendet das Formular unmittelbar bei einem kritischen Warnzeichen."""
+    """Fordert vor einer Eskalation die Bestätigung der kritischen Angabe an."""
+    if session.critical_confirmation_open:
+        return True
+
     for ctrl in controllers:
-        if not ctrl.check_partial_answers_for_escalation(answers, vitals):
+        flags = ctrl.preview_partial_red_flags(answers, vitals)
+        critical_flags = [flag for flag in flags if flag.severity == "critical"]
+        if not critical_flags:
             continue
 
-        if session.controllers and ctrl in session.controllers:
-            session.controllers.remove(ctrl)
-            session.controllers.insert(0, ctrl)
-        session.prefilled_answers.update(answers)
-        ui.notify(
-            "Kritisches Warnzeichen erkannt. Bitte sofort das Praxisteam informieren.",
-            color="negative",
-            multi_line=True,
-            timeout=0,
-        )
-        refresh_ui()
+        session.critical_confirmation_open = True
+        dialog = ui.dialog().props("persistent")
+        with dialog, ui.card().classes("w-[560px] max-w-full p-6"):
+            ui.label("Kritische Angabe bestätigen").classes(
+                "text-xl font-semibold text-[#9f1d20]"
+            )
+            ui.label(
+                "Mindestens eine Ihrer Angaben liegt in einem kritischen Bereich. "
+                "Bitte prüfen Sie den eingegebenen Messwert. Erst nach Ihrer "
+                "Bestätigung wird die Anamnese abgeschlossen und das Praxisteam informiert."
+            ).classes("text-[0.97rem] leading-7 text-slate-600")
+            for flag in critical_flags:
+                ui.label(f"• {flag.description}").classes(
+                    "text-sm leading-6 text-slate-700"
+                )
+
+            def _confirm_escalation() -> None:
+                session.critical_confirmation_open = False
+                dialog.close()
+                if not ctrl.check_partial_answers_for_escalation(answers, vitals):
+                    return
+                if session.controllers and ctrl in session.controllers:
+                    session.controllers.remove(ctrl)
+                    session.controllers.insert(0, ctrl)
+                session.prefilled_answers.update(answers)
+                ui.notify(
+                    "Kritisches Warnzeichen bestätigt. Bitte sofort das Praxisteam informieren.",
+                    color="negative",
+                    close_button="Schließen",
+                    classes="critical-red-flag-notification",
+                    multi_line=True,
+                    timeout=0,
+                )
+                refresh_ui()
+
+            def _correct_value() -> None:
+                session.critical_confirmation_open = False
+                dialog.close()
+
+            with ui.row().classes("w-full justify-end gap-3 mt-4"):
+                ui.button("Wert korrigieren", on_click=_correct_value).props("outline")
+                ui.button(
+                    "Kritischen Wert bestätigen", on_click=_confirm_escalation
+                ).props("unelevated").classes("bg-[#9f1d20] text-white")
+
+        dialog.open()
         return True
     return False
+
+
+def _dismiss_critical_warning() -> None:
+    """Close persistent red-flag notifications from a previous patient."""
+    ui.run_javascript(
+        "document.querySelectorAll('.critical-red-flag-notification "
+        ".q-notification__actions button').forEach(button => button.click());"
+    )
 
 
 def _begin_guided_questions(session: BrowserSession) -> None:
@@ -3387,13 +3531,15 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             )
 
         with ui.row().classes("w-full gap-3"):
-            ui.button("Neu starten", on_click=lambda: (session.reset(), refresh_ui())).props(
+            ui.button("Neu starten", on_click=lambda: _reset_browser_session(
+                session, refresh_ui
+            )).props(
                 "outline"
             ).classes("grow")
             if session.stage == "scenario":
                 ui.button(
                     "Abmelden",
-                    on_click=lambda: (session.reset(), refresh_ui()),
+                    on_click=lambda: _reset_browser_session(session, refresh_ui),
                 ).props("outline").classes("grow")
 
     _render_avatar(session, refresh_ui)

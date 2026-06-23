@@ -85,3 +85,23 @@ def test_partial_device_values_escalate_before_form_submission() -> None:
 
     assert escalated is True
     assert controller.state == DialogueState.END
+
+
+def test_preview_of_critical_value_does_not_end_anamnesis() -> None:
+    callbacks: list = []
+    controller = DialogueController(
+        scenario_key="C",
+        patient=PatientRecord(patient_id="preview-check", date_of_birth="1990-01-01"),
+        display_message=lambda _text: None,
+        request_input=callbacks.append,
+    )
+    controller.start()
+    callbacks.pop()("ja")
+
+    flags = controller.preview_partial_red_flags(
+        {"blutdruck_systolisch": "190", "blutdruck_diastolisch": "100"}
+    )
+
+    assert any(flag.severity == "critical" for flag in flags)
+    assert controller.state == DialogueState.ANAMNESIS
+    assert controller.summary is None

@@ -698,12 +698,7 @@ class DialogueController:
         if vitals:
             self._vitals.update(vitals)
 
-        flags = check(
-            scenario=self._scenario_id,
-            answers=self._answers,
-            vitals=self._vitals,
-            patient_medications=self._patient.medications,
-        )
+        flags = self.preview_partial_red_flags(answers, vitals)
         if not any(flag.severity == "critical" for flag in flags):
             return False
 
@@ -716,6 +711,32 @@ class DialogueController:
         self._state_machine.jump_to(DialogueState.ESCALATION)
         self._handle_state()
         return True
+
+    def preview_partial_red_flags(
+        self,
+        answers: dict[str, str],
+        vitals: dict[str, int | float] | None = None,
+    ) -> list[RedFlag]:
+        """Prüft Zwischenwerte, ohne Antworten oder Dialogzustand zu verändern."""
+        candidate_answers = dict(self._answers)
+        question_keys = {question.key for question in self._questions}
+        candidate_answers.update(
+            {
+                key: str(value).strip()
+                for key, value in answers.items()
+                if key in question_keys
+            }
+        )
+        candidate_vitals = dict(self._vitals)
+        if vitals:
+            candidate_vitals.update(vitals)
+
+        return check(
+            scenario=self._scenario_id,
+            answers=candidate_answers,
+            vitals=candidate_vitals,
+            patient_medications=self._patient.medications,
+        )
 
     def _escalate_critical_cough_answers(self) -> bool:
         """Kompatibilität für bestehende Aufrufer der früheren Husten-Methode."""
