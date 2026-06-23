@@ -27,6 +27,7 @@ class TestPatientListClient:
                         "geschlecht": "weiblich",
                         "sprache": "de",
                     },
+                    "vorbereitete_szenarien": ["C", "D"],
                     "kontakt": {"adresse": {"ort": "Mannheim"}},
                     "versicherung": {"krankenkasse": {"name": "AOK Test"}},
                     "administrativ": {"patientenhinweise": ["Nuechtern erscheinen"]},
@@ -102,6 +103,10 @@ class TestPatientListClient:
         assert patients[0].details.open_tasks == (
             "Labor kontrollieren - faellig 2026-07-20 - Prioritaet normal",
         )
+        assert patients[0].prepared_scenarios == ("C", "D")
+        assert patients[0].prepared_scenarios_saved is True
+        assert patients[1].prepared_scenarios == ()
+        assert patients[1].prepared_scenarios_saved is False
 
     def test_load_empty_list(self, tmp_path) -> None:
         path = self._write_json(tmp_path, [])
@@ -145,6 +150,35 @@ class TestPatientListClient:
         client = PatientListClient(path)
         with pytest.raises(FileNotFoundError):
             client.load_patients()
+
+    def test_update_prepared_scenarios_preserves_patient_entry(self, tmp_path) -> None:
+        data = [
+            {
+                "schema_version": "1.0",
+                "source_system": {"system_name": "PVS"},
+                "patient": {
+                    "patient_id": "P-001",
+                    "status": "aktiv",
+                    "stammdaten": {
+                        "vorname": "Anna",
+                        "nachname": "Muster",
+                        "geburtsdatum": "1985-03-14",
+                    },
+                    "medizinische_uebersicht": {"dauerdiagnosen": []},
+                },
+            }
+        ]
+        path = self._write_json(tmp_path, data)
+        client = PatientListClient(path)
+
+        client.update_prepared_scenarios("P-001", ["D", "X", "A", "A"])
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        assert raw[0]["source_system"] == {"system_name": "PVS"}
+        assert raw[0]["patient"]["vorbereitete_szenarien"] == ["A", "D"]
+        patients = client.load_patients()
+        assert patients[0].prepared_scenarios == ("A", "D")
+        assert patients[0].prepared_scenarios_saved is True
 
 
 class TestPatientRecord:

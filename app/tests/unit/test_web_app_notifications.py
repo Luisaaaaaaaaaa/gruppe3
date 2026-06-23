@@ -49,6 +49,28 @@ def test_selecting_another_patient_dismisses_previous_warning(monkeypatch) -> No
     assert session.current_patient is patient
 
 
+def test_select_patient_uses_saved_prepared_scenarios(monkeypatch) -> None:
+    monkeypatch.setattr("app.ui.web_app._dismiss_critical_warning", lambda: None)
+    monkeypatch.setattr(
+        "app.ui.web_app._get_recommended_scenario_ui_key", lambda _: "A"
+    )
+    session = SimpleNamespace(
+        current_patient=None,
+        selected_scenarios=[],
+        login_message="old",
+        login_tone="tone-danger",
+    )
+    patient = PatientRecord(
+        patient_id="P-1",
+        prepared_scenarios=("B", "D"),
+        prepared_scenarios_saved=True,
+    )
+
+    _select_patient_for_personal_mode(session, patient, lambda: None)
+
+    assert session.selected_scenarios == ["B", "D"]
+
+
 def test_reset_browser_session_dismisses_warning_before_reset(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(

@@ -1575,22 +1575,29 @@ def _select_patient_for_personal_mode(
         _dismiss_critical_warning()
     session.current_patient = patient
     if previous_id != patient.patient_id:
-        recommended_ui_key = _get_recommended_scenario_ui_key(patient)
-        session.selected_scenarios = [recommended_ui_key] if recommended_ui_key else []
+        if getattr(patient, "prepared_scenarios_saved", False):
+            session.selected_scenarios = list(
+                getattr(patient, "prepared_scenarios", ())
+            )
+        else:
+            recommended_ui_key = _get_recommended_scenario_ui_key(patient)
+            session.selected_scenarios = [recommended_ui_key] if recommended_ui_key else []
     session.login_message = ""
     session.login_tone = "tone-info"
     refresh_ui()
 
 
-def _toggle_staff_scenario(
-    session: BrowserSession, scenario_key: str, is_selected: bool
-) -> None:
-    selected = set(session.selected_scenarios)
-    if is_selected:
-        selected.add(scenario_key)
-    else:
-        selected.discard(scenario_key)
-    session.selected_scenarios = sorted(selected)
+def _set_staff_scenarios(session: BrowserSession, scenario_keys) -> None:
+    if not isinstance(scenario_keys, list):
+        scenario_keys = []
+    allowed = {scenario["key"] for scenario in SCENARIOS}
+    session.selected_scenarios = sorted(
+        {
+            str(key).strip().upper()
+            for key in scenario_keys
+            if str(key).strip().upper() in allowed
+        }
+    )
 
 
 def _render_patient_detail_section(title: str, values: list[str] | tuple[str, ...]) -> None:
@@ -1647,6 +1654,13 @@ def _handoff_to_patient(session: BrowserSession, refresh_ui: Callable[[], None])
     _start_scenarios(session, session.selected_scenarios, refresh_ui)
 
 
+def _find_loaded_patient(patient_id: str) -> PatientRecord | None:
+    for patient in PATIENTS:
+        if patient.patient_id == patient_id:
+            return patient
+    return None
+
+
 def _generate_patient_id() -> str:
     existing = [p.patient_id for p in PATIENTS if p.patient_id.startswith("MAN-")]
     numbers = []
@@ -1684,95 +1698,93 @@ def _open_new_patient_dialog(
             ).classes("w-full")
             telefon = ui.input("Telefon").props("outlined").classes("w-full")
 
-            if edit_patient:
-                with ui.row().classes("w-full gap-3"):
-                    with ui.column().classes("grow gap-0"):
-                        geschlecht = ui.select(
-                            ["", "männlich", "weiblich", "divers"],
-                            label="Geschlecht",
-                            value=edit_patient.details.gender,
-                        ).props("outlined").classes("w-full")
-                    with ui.column().classes("grow gap-0"):
-                        groesse = ui.input(
-                            "Größe (cm)",
-                            value=str(edit_patient.details.groesse_cm or ""),
-                        ).props("outlined type=number").classes("w-full")
-                sprache = ui.input(
-                    "Sprache",
-                    value=edit_patient.details.language,
-                ).props("outlined").classes("w-full")
-                wohnort = ui.input(
-                    "Wohnort",
-                    value=edit_patient.details.contact_city,
-                ).props("outlined").classes("w-full")
-                versicherung = ui.input(
-                    "Versicherung",
-                    value=edit_patient.details.insurance,
-                ).props("outlined").classes("w-full")
-            else:
-                geschlecht = None  # type: ignore[assignment]
-                groesse = None
-                sprache = None
-                wohnort = None
-                versicherung = None
-
+            with ui.row().classes("w-full gap-3"):
+                with ui.column().classes("grow gap-0"):
+                    geschlecht = ui.select(
+                        ["", "männlich", "weiblich", "divers"],
+                        label="Geschlecht",
+                        value=edit_patient.details.gender if edit_patient else "",
+                    ).props("outlined").classes("w-full")
+                with ui.column().classes("grow gap-0"):
+                    groesse = ui.input(
+                        "Größe (cm)",
+                        value=(
+                            str(edit_patient.details.groesse_cm or "")
+                            if edit_patient
+                            else ""
+                        ),
+                    ).props("outlined type=number").classes("w-full")
+            sprache = ui.input(
+                "Sprache",
+                value=edit_patient.details.language if edit_patient else "",
+            ).props("outlined").classes("w-full")
+            wohnort = ui.input(
+                "Wohnort",
+                value=edit_patient.details.contact_city if edit_patient else "",
+            ).props("outlined").classes("w-full")
+            versicherung = ui.input(
+                "Versicherung",
+                value=edit_patient.details.insurance if edit_patient else "",
+            ).props("outlined").classes("w-full")
             if edit_patient:
                 vorname.value = edit_patient.first_name
                 nachname.value = edit_patient.last_name
                 geburtsdatum.value = edit_patient.date_of_birth
                 telefon.value = edit_patient.details.phone
 
-        # --- Kurzinfos (nur im Bearbeiten-Modus) ---
-        if edit_patient:
-            with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
-                ui.label("Kurzinfos (ein Eintrag pro Zeile)").classes("text-base font-semibold mb-2")
-                with ui.row().classes("w-full gap-3"):
-                    with ui.column().classes("grow gap-0"):
-                        dauerdiagnosen = ui.textarea(
-                            "Dauerdiagnosen",
-                            value="\n".join(edit_patient.details.long_term_diagnoses),
-                        ).props("outlined").classes("w-full")
-                    with ui.column().classes("grow gap-0"):
-                        medikation = ui.textarea(
-                            "Medikation",
-                            value="\n".join(edit_patient.medications),
-                        ).props("outlined").classes("w-full")
-                with ui.row().classes("w-full gap-3"):
-                    with ui.column().classes("grow gap-0"):
-                        risikofaktoren = ui.textarea(
-                            "Risikofaktoren",
-                            value="\n".join(edit_patient.details.risk_factors),
-                        ).props("outlined").classes("w-full")
-                    with ui.column().classes("grow gap-0"):
-                        allergien = ui.textarea(
-                            "Allergien",
-                            value="\n".join(edit_patient.details.allergies),
-                        ).props("outlined").classes("w-full")
+        # --- Kurzinfos ---
+        with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
+            ui.label("Kurzinfos (ein Eintrag pro Zeile)").classes("text-base font-semibold mb-2")
+            with ui.row().classes("w-full gap-3"):
+                with ui.column().classes("grow gap-0"):
+                    dauerdiagnosen = ui.textarea(
+                        "Dauerdiagnosen",
+                        value=(
+                            "\n".join(edit_patient.details.long_term_diagnoses)
+                            if edit_patient
+                            else ""
+                        ),
+                    ).props("outlined").classes("w-full")
+                with ui.column().classes("grow gap-0"):
+                    medikation = ui.textarea(
+                        "Medikation",
+                        value="\n".join(edit_patient.medications) if edit_patient else "",
+                    ).props("outlined").classes("w-full")
+            with ui.row().classes("w-full gap-3"):
+                with ui.column().classes("grow gap-0"):
+                    risikofaktoren = ui.textarea(
+                        "Risikofaktoren",
+                        value=(
+                            "\n".join(edit_patient.details.risk_factors)
+                            if edit_patient
+                            else ""
+                        ),
+                    ).props("outlined").classes("w-full")
+                with ui.column().classes("grow gap-0"):
+                    allergien = ui.textarea(
+                        "Allergien",
+                        value=(
+                            "\n".join(edit_patient.details.allergies)
+                            if edit_patient
+                            else ""
+                        ),
+                    ).props("outlined").classes("w-full")
 
-            # --- Nächster Termin (nur im Bearbeiten-Modus) ---
-            with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
-                ui.label("Nächster Termin").classes("text-base font-semibold mb-2")
-                termindatum = ui.input(
-                    "Datum/Uhrzeit",
-                    value=edit_patient.details.next_appointment_at,
-                ).props("outlined type=datetime-local").classes("w-full")
-                terminart = ui.input(
-                    "Art",
-                    value=edit_patient.details.next_appointment_type,
-                ).props("outlined").classes("w-full")
-                terminnotiz = ui.input(
-                    "Hinweis",
-                    value=edit_patient.details.next_appointment_note,
-                ).props("outlined").classes("w-full")
-        else:
-            dauerdiagnosen = None
-            medikation = None
-            risikofaktoren = None
-            allergien = None
-            termindatum = None
-            terminart = None
-            terminnotiz = None
-
+        # --- Nächster Termin ---
+        with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
+            ui.label("Nächster Termin").classes("text-base font-semibold mb-2")
+            termindatum = ui.input(
+                "Datum/Uhrzeit",
+                value=edit_patient.details.next_appointment_at if edit_patient else "",
+            ).props("outlined type=datetime-local").classes("w-full")
+            terminart = ui.input(
+                "Art",
+                value=edit_patient.details.next_appointment_type if edit_patient else "",
+            ).props("outlined").classes("w-full")
+            terminnotiz = ui.input(
+                "Hinweis",
+                value=edit_patient.details.next_appointment_note if edit_patient else "",
+            ).props("outlined").classes("w-full")
         # --- Notizen ---
         notizen = ui.textarea("Notizen").props("outlined").classes("w-full")
         if edit_patient:
@@ -1860,6 +1872,12 @@ def _open_new_patient_dialog(
                     medications=med_list,
                     conditions=orig_conds,
                     details=details,
+                    prepared_scenarios=(
+                        edit_patient.prepared_scenarios if edit_patient else ()
+                    ),
+                    prepared_scenarios_saved=(
+                        edit_patient.prepared_scenarios_saved if edit_patient else False
+                    ),
                 )
 
                 client = PatientListClient(
@@ -1870,17 +1888,33 @@ def _open_new_patient_dialog(
                 PATIENTS = client.load_patients()
 
                 dialog.close()
-                if not edit_patient:
-                    session.current_patient = patient
+                reloaded_patient = _find_loaded_patient(pid)
+                if edit_patient:
+                    session.current_patient = reloaded_patient or patient
+                    if getattr(session.current_patient, "prepared_scenarios_saved", False):
+                        session.selected_scenarios = list(
+                            getattr(session.current_patient, "prepared_scenarios", ())
+                        )
+                    else:
+                        recommended_ui_key = _get_recommended_scenario_ui_key(
+                            session.current_patient
+                        )
+                        session.selected_scenarios = (
+                            [recommended_ui_key] if recommended_ui_key else []
+                        )
+                else:
+                    session.current_patient = None
                     session.selected_scenarios.clear()
                     session.staff_search_query = ""
+                session.stage = "staff_selection"
+                session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
                 ui.notify(
-                    f"Patient {pid} {'aktualisiert' if edit_patient else 'angelegt'}.",
+                    f"Patientendaten für {pid} {'aktualisiert' if edit_patient else 'angelegt'}.",
                     color="positive",
                 )
                 refresh_ui()
 
-            ui.button("Speichern", on_click=save).props("unelevated").classes(
+            ui.button("Patientendaten speichern", on_click=save).props("unelevated").classes(
                 "bg-[#0f766e] text-white"
             )
 
@@ -2003,54 +2037,32 @@ def _render_staff_selection(
             with ui.card().classes("surface-card w-full shadow-none"):
                 ui.label("Szenarien festlegen").classes("text-lg font-semibold")
                 ui.label(
-                    "Mehrfachauswahl ist erlaubt. Die markierten Szenarien werden direkt im Patientenmodus gestartet."
+                    "Mehrfachauswahl ist erlaubt. Es stehen nur die aktuell umgesetzten Szenarien zur Auswahl."
                 ).classes("text-sm leading-6 text-slate-600")
 
-                with ui.column().classes("w-full gap-3 mt-3"):
-                    for scenario in SCENARIOS:
-                        is_recommended = scenario["key"] == recommended_ui_key
-                        is_checked = scenario["key"] in set(session.selected_scenarios)
-                        card_classes = "surface-card scenario-card w-full shadow-none"
-                        if is_recommended:
-                            card_classes += " border-[2px] border-[#17603d] bg-[#e3f5e9]"
-                        with ui.card().classes(card_classes):
-                            with ui.row().classes("items-start gap-3"):
-                                ui.icon(scenario["icon"]).classes(
-                                    f"rounded-2xl p-3 text-2xl {scenario['tone']}"
-                                )
-                                with ui.column().classes("grow gap-1"):
-                                    with ui.row().classes("items-center gap-2 flex-wrap"):
-                                        ui.label(f"Szenario {scenario['key']}").classes("eyebrow")
-                                        if is_recommended:
-                                            ui.label("Empfohlen").classes(
-                                                "status-chip tone-success text-[0.7rem]"
-                                            )
-                                    ui.label(scenario["title"]).classes("text-lg font-semibold")
-                                    ui.label(scenario["subtitle"]).classes(
-                                        "text-sm font-medium text-slate-500"
-                                    )
-                                    ui.label(scenario["description"]).classes(
-                                        "text-sm leading-6 text-slate-600"
-                                    )
-                                checkbox = ui.checkbox(
-                                    "Für den Patienten vorbereiten",
-                                    value=is_checked,
-                                )
-                                checkbox.on(
-                                    "update:model-value",
-                                    lambda e, key=scenario["key"]: _toggle_staff_scenario(
-                                        session, key, bool(e.args)
-                                    ),
-                                )
+                scenario_options = {
+                    scenario["key"]: (
+                        f"Szenario {scenario['key']} - {scenario['title']}"
+                        + (" (empfohlen)" if scenario["key"] == recommended_ui_key else "")
+                    )
+                    for scenario in SCENARIOS
+                }
+                selected_keys = [
+                    key for key in session.selected_scenarios if key in scenario_options
+                ]
+                scenario_select = ui.select(
+                    scenario_options,
+                    label="Szenarien",
+                    value=selected_keys,
+                    multiple=True,
+                    clearable=True,
+                    on_change=lambda e: _set_staff_scenarios(session, e.value),
+                ).props("outlined use-chips").classes("w-full mt-3")
+                scenario_select.tooltip(
+                    "Auswahl aus Husten/Infekt, Brustschmerz, Hypertonie und Typ-2-Diabetes"
+                )
 
             with ui.row().classes("w-full justify-end gap-3"):
-                ui.button(
-                    "Szenarien leeren",
-                    on_click=lambda: (
-                        setattr(session, "selected_scenarios", []),
-                        refresh_ui(),
-                    ),
-                ).props("outline")
                 ui.button(
                     "Patientenmodus starten",
                     on_click=lambda: _handoff_to_patient(session, refresh_ui),

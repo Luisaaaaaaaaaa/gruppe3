@@ -32,3 +32,5 @@ class PatientRecord:
     medications: list[str] = field(default_factory=list)
     conditions: str = ""
     details: PatientDetails = field(default_factory=PatientDetails)
+    prepared_scenarios: tuple[str, ...] = ()
+    prepared_scenarios_saved: bool = False

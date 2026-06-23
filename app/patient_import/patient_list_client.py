@@ -4,6 +4,8 @@ from pathlib import Path
 
 from app.patient_import.patient_schema import PatientDetails, PatientRecord
 
+PREPARED_SCENARIO_KEYS = ("A", "B", "C", "D")
+
 
 class PatientListClient:
     def __init__(self, json_path: Path) -> None:
@@ -30,6 +32,8 @@ class PatientListClient:
                     medications=medications,
                     conditions=conditions,
                     details=details,
+                    prepared_scenarios=self._extract_prepared_scenarios(patient),
+                    prepared_scenarios_saved="vorbereitete_szenarien" in patient,
                 )
             )
 
@@ -202,6 +206,10 @@ class PatientListClient:
             tasks.append(" - ".join(parts))
         return tasks
 
+    @staticmethod
+    def _extract_prepared_scenarios(patient: dict) -> tuple[str, ...]:
+        raw_scenarios = patient.get("vorbereitete_szenarien", [])
+        return _normalize_prepared_scenarios(raw_scenarios)
 
     def append_patient(self, patient: PatientRecord) -> None:
         raw_entries = json.loads(self._json_path.read_text(encoding="utf-8"))
@@ -218,6 +226,24 @@ class PatientListClient:
             encoding="utf-8",
         )
 
+    def update_prepared_scenarios(
+        self, patient_id: str, scenarios: list[str] | tuple[str, ...]
+    ) -> None:
+        raw_entries = json.loads(self._json_path.read_text(encoding="utf-8"))
+        prepared_scenarios = list(_normalize_prepared_scenarios(scenarios))
+
+        for entry in raw_entries:
+            patient = entry.get("patient", {})
+            if patient.get("patient_id") == patient_id:
+                patient["vorbereitete_szenarien"] = prepared_scenarios
+                self._json_path.write_text(
+                    json.dumps(raw_entries, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                return
+
+        raise KeyError(f"Patient {patient_id} nicht gefunden")
+
     @staticmethod
     def _record_to_entry(rec: PatientRecord) -> dict:
         details = rec.details
@@ -225,7 +251,7 @@ class PatientListClient:
         def _str_list(items: tuple[str, ...]) -> list[str]:
             return list(items)
 
-        return {
+        entry = {
             "schema_version": "1.0",
             "source_system": {"name": "SET-Anamnese", "version": "1.0"},
             "patient": {
@@ -281,6 +307,9 @@ class PatientListClient:
                 },
             },
         }
+        if rec.prepared_scenarios_saved:
+            entry["patient"]["vorbereitete_szenarien"] = list(rec.prepared_scenarios)
+        return entry
 
 
 def _parse_allergy(raw: str) -> dict:
@@ -367,6 +396,19 @@ def _parse_task(raw: str) -> dict:
         elif p.startswith("Prioritaet "):
             result["prioritaet"] = p.replace("Prioritaet ", "")
     return result
+
+
+def _normalize_prepared_scenarios(scenarios) -> tuple[str, ...]:
+    if not isinstance(scenarios, (list, tuple, set)):
+        return ()
+
+    selected: list[str] = []
+    allowed = set(PREPARED_SCENARIO_KEYS)
+    for scenario in scenarios:
+        key = str(scenario).strip().upper()
+        if key in allowed and key not in selected:
+            selected.append(key)
+    return tuple(sorted(selected))
 
 
 def _extract_brand_name(praeparat: str) -> str:
