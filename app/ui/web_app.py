@@ -25,6 +25,7 @@ from app.dialogue.consent_flow import (
 from app.dialogue.dialogue_controller import DialogueController
 from app.dialogue.state_machine import DialogueState
 from app.identity.identity_check import IdentityCheck
+from app.identity.name_normalization import normalize_person_name, person_name_key
 from app.patient_import.patient_list_client import PatientListClient
 from app.patient_import.patient_schema import PatientDetails, PatientRecord
 from app.output.export_pdf import export_summary_pdf
@@ -759,7 +760,7 @@ def _get_process_steps(session: BrowserSession) -> list[tuple[str, str]]:
 def _format_patient_name(patient: PatientRecord | None) -> str:
     if patient is None:
         return "Noch kein Patient angemeldet"
-    return f"{patient.first_name} {patient.last_name}"
+    return normalize_person_name(f"{patient.first_name} {patient.last_name}")
 
 
 def _format_display_date(raw_value: str) -> str:
@@ -812,7 +813,7 @@ def _summarize_values(values: list[str] | tuple[str, ...], limit: int = 2) -> st
 
 
 def _patient_matches_staff_search(patient: PatientRecord, query: str) -> bool:
-    normalized_query = query.strip().casefold()
+    normalized_query = normalize_person_name(query).casefold()
     if not normalized_query:
         return True
 
@@ -822,7 +823,7 @@ def _patient_matches_staff_search(patient: PatientRecord, query: str) -> bool:
         _format_display_date(patient.date_of_birth),
         patient.patient_id,
     ]
-    combined = " ".join(search_values).casefold()
+    combined = normalize_person_name(" ".join(search_values)).casefold()
     return normalized_query in combined
 
 
@@ -930,9 +931,57 @@ def _parse_birth_date(day: str, month: str, year: str) -> date:
         raise ValueError("Das Jahr muss vierstellig eingegeben werden.")
 
     try:
-        return date(int(year), int(month), int(day))
+        parsed_date = date(int(year), int(month), int(day))
     except ValueError as exc:
         raise ValueError("Bitte geben Sie ein gültiges Kalenderdatum ein.") from exc
+    _validate_birth_date_not_in_future(parsed_date)
+    return parsed_date
+
+
+def _validate_birth_date_not_in_future(birth_date: date) -> None:
+    if birth_date > date.today():
+        raise ValueError("Das Geburtsdatum darf nicht in der Zukunft liegen.")
+
+
+def _parse_optional_iso_birth_date(raw_value: str) -> str:
+    normalized = raw_value.strip()
+    if not normalized:
+        return ""
+    try:
+        parsed_date = date.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("Bitte geben Sie ein gueltiges Kalenderdatum ein.") from exc
+
+    _validate_birth_date_not_in_future(parsed_date)
+    return parsed_date.isoformat()
+
+
+def _parse_required_iso_birth_date(raw_value: str) -> str:
+    birth_date = _parse_optional_iso_birth_date(raw_value)
+    if not birth_date:
+        raise ValueError("Bitte geben Sie ein Geburtsdatum ein.")
+    return birth_date
+
+
+def _find_duplicate_patient(
+    first_name: str,
+    last_name: str,
+    birth_date: str,
+    exclude_patient_id: str | None = None,
+) -> PatientRecord | None:
+    first_key = person_name_key(first_name)
+    last_key = person_name_key(last_name)
+    return next(
+        (
+            patient
+            for patient in PATIENTS
+            if patient.patient_id != exclude_patient_id
+            and person_name_key(patient.first_name) == first_key
+            and person_name_key(patient.last_name) == last_key
+            and patient.date_of_birth == birth_date
+        ),
+        None,
+    )
 
 
 def _render_message(entry: ChatEntry) -> None:
@@ -1286,6 +1335,7 @@ def main_page(
 
 def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        max_birth_date = date.today().isoformat()
         if session.is_personal_mode and session.current_patient is not None:
             ui.label("Patientenbestaetigung").classes("text-2xl font-semibold")
             ui.label(
@@ -1325,17 +1375,23 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             first_name = ui.input("Vorname").props("outlined").classes("min-w-[220px] grow")
             last_name = ui.input("Nachname").props("outlined").classes("min-w-[220px] grow")
 
-        with ui.row().classes("w-full gap-4 flex-wrap items-end"):
-            day_input = ui.input("Tag").props("outlined maxlength=2").classes("w-24")
-            month_input = ui.input("Monat").props("outlined maxlength=2").classes("w-24")
-            year_input = ui.input("Jahr").props("outlined maxlength=4").classes("w-32")
+        birth_date_input = ui.input("Geburtsdatum").props(
+            f"outlined type=date max={max_birth_date}"
+        ).classes("w-full max-w-[260px]")
 
         def submit_login() -> None:
+            normalized_first_name = normalize_person_name(first_name.value or "")
+            normalized_last_name = normalize_person_name(last_name.value or "")
+
+            if not normalized_first_name or not normalized_last_name:
+                session.login_message = "Vorname und Nachname muessen ausgefuellt werden."
+                session.login_tone = "tone-danger"
+                refresh_ui()
+                return
+
             try:
-                parsed_birth_date = _parse_birth_date(
-                    (day_input.value or "").strip(),
-                    (month_input.value or "").strip(),
-                    (year_input.value or "").strip(),
+                birth_date = _parse_required_iso_birth_date(
+                    birth_date_input.value or ""
                 )
             except ValueError as exc:
                 session.login_message = str(exc)
@@ -1343,28 +1399,18 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
                 refresh_ui()
                 return
 
-            if not (first_name.value or "").strip() or not (last_name.value or "").strip():
-                session.login_message = "Vorname und Nachname müssen ausgefüllt werden."
-                session.login_tone = "tone-danger"
-                refresh_ui()
-                return
-
             result = session.identity_check.authenticate(
-                (first_name.value or "").strip(),
-                (last_name.value or "").strip(),
-                parsed_birth_date.isoformat(),
+                normalized_first_name,
+                normalized_last_name,
+                birth_date,
             )
             session.login_message = result.message
             session.login_tone = "tone-success" if result.success else "tone-danger"
             session.attempts_left = result.attempts_left
 
-            if result.success:
-                _dismiss_critical_warning()
-                session.current_patient = result.patient
-                if session.is_personal_mode and session.selected_scenarios:
-                    _start_scenarios(session, session.selected_scenarios, refresh_ui)
-                    return
-                session.stage = "scenario"
+            if result.success and result.patient is not None:
+                _complete_successful_login(session, result.patient, refresh_ui)
+                return
             elif result.escalate:
                 session.login_blocked_until = time.time() + 15
                 session.identity_check = session.identity_check.__class__(
@@ -1388,6 +1434,23 @@ def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> No
             ui.button("Anmelden", on_click=submit_login).props("unelevated").classes(
                 "bg-[#0f766e] text-white"
             )
+
+
+def _complete_successful_login(
+    session: BrowserSession, patient: PatientRecord, refresh_ui: Callable[[], None]
+) -> None:
+    _dismiss_critical_warning()
+    session.current_patient = patient
+    session.attempts_left = MAX_ATTEMPTS
+    session.login_message = ""
+    session.login_tone = "tone-info"
+    session.login_blocked_until = None
+    session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
+    if session.is_personal_mode and session.selected_scenarios:
+        _start_scenarios(session, session.selected_scenarios, refresh_ui)
+        return
+    session.stage = "scenario"
+    refresh_ui()
 
 
 def _get_recommended_scenario_key(
@@ -1603,17 +1666,22 @@ def _open_new_patient_dialog(
 ) -> None:
     dialog = ui.dialog()
     dialog_style = "w-[600px] max-w-full p-6"
+    max_birth_date = date.today().isoformat()
     with dialog, ui.card().classes(dialog_style):
         title = "Patient bearbeiten" if edit_patient else "Neuen Patienten anlegen"
         ui.label(title).classes("text-xl font-semibold mb-4")
-        ui.label("Alle Felder sind optional.").classes("text-sm text-slate-500 mb-2")
+        ui.label(
+            "Vorname, Nachname und Geburtsdatum sind Pflichtfelder."
+        ).classes("text-sm text-slate-500 mb-2")
 
         # --- Stammdaten ---
         with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
             ui.label("Stammdaten").classes("text-base font-semibold mb-2")
-            vorname = ui.input("Vorname").props("outlined").classes("w-full")
-            nachname = ui.input("Nachname").props("outlined").classes("w-full")
-            geburtsdatum = ui.input("Geburtsdatum").props("outlined type=date").classes("w-full")
+            vorname = ui.input("Vorname").props("outlined required").classes("w-full")
+            nachname = ui.input("Nachname").props("outlined required").classes("w-full")
+            geburtsdatum = ui.input("Geburtsdatum").props(
+                f"outlined required type=date max={max_birth_date}"
+            ).classes("w-full")
             telefon = ui.input("Telefon").props("outlined").classes("w-full")
 
             if edit_patient:
@@ -1717,6 +1785,39 @@ def _open_new_patient_dialog(
                 pid = edit_patient.patient_id if edit_patient else _generate_patient_id()
 
                 orig_details = edit_patient.details if edit_patient else PatientDetails()
+                orig_dob = edit_patient.date_of_birth if edit_patient else ""
+                orig_first = edit_patient.first_name if edit_patient else ""
+                orig_last = edit_patient.last_name if edit_patient else ""
+                first = normalize_person_name(vorname.value or orig_first)
+                last = normalize_person_name(nachname.value or orig_last)
+
+                if not first or not last:
+                    ui.notify(
+                        "Vorname und Nachname sind Pflichtfelder.",
+                        color="negative",
+                    )
+                    return
+
+                try:
+                    birth_date = _parse_required_iso_birth_date(
+                        geburtsdatum.value or orig_dob
+                    )
+                except ValueError as exc:
+                    ui.notify(str(exc), color="negative")
+                    return
+
+                duplicate = _find_duplicate_patient(
+                    first,
+                    last,
+                    birth_date,
+                    exclude_patient_id=edit_patient.patient_id if edit_patient else None,
+                )
+                if duplicate is not None:
+                    ui.notify(
+                        f"Dieser Patient existiert bereits ({duplicate.patient_id}).",
+                        color="warning",
+                    )
+                    return
 
                 def _lines(field) -> tuple[str, ...]:
                     if field is None:
@@ -1745,9 +1846,6 @@ def _open_new_patient_dialog(
                     open_tasks=orig_details.open_tasks,
                     status=orig_details.status,
                 )
-                orig_first = edit_patient.first_name if edit_patient else vorname.value or ""
-                orig_last = edit_patient.last_name if edit_patient else nachname.value or ""
-                orig_dob = edit_patient.date_of_birth if edit_patient else geburtsdatum.value or ""
                 orig_conds = edit_patient.conditions if edit_patient else ""
                 med_list = (
                     [m.strip() for m in medikation.value.split("\n") if m.strip()]
@@ -1756,9 +1854,9 @@ def _open_new_patient_dialog(
                 )
                 patient = PatientRecord(
                     patient_id=pid,
-                    first_name=vorname.value or orig_first,
-                    last_name=nachname.value or orig_last,
-                    date_of_birth=geburtsdatum.value or orig_dob,
+                    first_name=first,
+                    last_name=last,
+                    date_of_birth=birth_date,
                     medications=med_list,
                     conditions=orig_conds,
                     details=details,

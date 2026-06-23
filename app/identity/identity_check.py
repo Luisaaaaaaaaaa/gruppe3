@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.identity.name_normalization import person_name_key
 from app.patient_import.patient_schema import PatientRecord
 
 
@@ -29,16 +30,16 @@ class IdentityCheck:
     def authenticate(
         self, first_name: str, last_name: str, date_of_birth: str
     ) -> AuthenticationResult:
-        normalized_first_name = first_name.strip().casefold()
-        normalized_last_name = last_name.strip().casefold()
+        normalized_first_name = person_name_key(first_name)
+        normalized_last_name = person_name_key(last_name)
         normalized_birth_date = date_of_birth.strip()
 
         patient = next(
             (
                 candidate
                 for candidate in self._patients
-                if candidate.first_name.casefold() == normalized_first_name
-                and candidate.last_name.casefold() == normalized_last_name
+                if person_name_key(candidate.first_name) == normalized_first_name
+                and person_name_key(candidate.last_name) == normalized_last_name
                 and candidate.date_of_birth == normalized_birth_date
             ),
             None,

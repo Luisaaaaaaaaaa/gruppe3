@@ -702,5 +702,51 @@
         "offene_aufgaben": []
       }
     }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "name": "SET-Anamnese",
+      "version": "1.0"
+    },
+    "patient": {
+      "patient_id": "MAN-0002",
+      "status": "aktiv",
+      "stammdaten": {
+        "vorname": "Luisa",
+        "nachname": "",
+        "geburtsdatum": "1922-02-04",
+        "geschlecht": "",
+        "sprache": ""
+      },
+      "kontakt": {
+        "adresse": {
+          "ort": ""
+        },
+        "telefon": ""
+      },
+      "versicherung": {
+        "krankenkasse": {
+          "name": ""
+        }
+      },
+      "administrativ": {
+        "patientenhinweise": []
+      },
+      "medizinische_uebersicht": {
+        "allergien": [],
+        "risikofaktoren": {},
+        "dauerdiagnosen": [],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [],
+          "bedarfsmedikation": []
+        }
+      },
+      "termine": {
+        "naechster_termin": null,
+        "offene_aufgaben": []
+      }
+    }
   }
 ]
