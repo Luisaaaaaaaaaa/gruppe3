@@ -16,6 +16,7 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 from app.ai.symptom_extractor import extract_answers
+from app.ai.assistant_chat import answer_question
 from app.dialogue.consent_flow import (
     CONSENT_ACCEPTED,
     CONSENT_DECLINED,
@@ -568,6 +569,8 @@ class BrowserSession:
     login_blocked_until: float | None = None
     avatar_messages: list[ChatEntry] = field(default_factory=list)
     chat_input_text: str = ""
+    assistant_messages: list[ChatEntry] = field(default_factory=list)
+    assistant_input_text: str = ""
     prefilled_answers: dict[str, str] = field(default_factory=dict)
     ai_prefilled_keys: set[str] = field(default_factory=set)
     chat_phase_done: bool = False
@@ -600,6 +603,8 @@ class BrowserSession:
         self.login_blocked_until = None
         self.avatar_messages.clear()
         self.chat_input_text = ""
+        self.assistant_messages.clear()
+        self.assistant_input_text = ""
         self.prefilled_answers.clear()
         self.ai_prefilled_keys.clear()
         self.chat_phase_done = False
@@ -3951,6 +3956,118 @@ def _cancel_editing(
     refresh_ui()
 
 
+def _collect_questions_and_answers(
+    session: BrowserSession,
+) -> tuple[list, dict[str, str]]:
+    """Sammelt Fragen und aktuelle Antworten über alle aktiven Controller."""
+    controllers = session.controllers or (
+        [session.controller] if session.controller else []
+    )
+    questions: list = []
+    # Basis: KI-Vorausfüllungen und Gerätewerte (im Formular noch nicht
+    # zwingend im Controller gespeichert), darüber die bestätigten Antworten.
+    answers: dict[str, str] = {
+        k: str(v).strip()
+        for k, v in _merged_prefilled_answers(session).items()
+        if str(v).strip()
+    }
+    seen_keys: set[str] = set()
+    for controller in controllers:
+        if controller is None:
+            continue
+        for question, answer in controller.get_questions_with_answers():
+            if question.key not in seen_keys:
+                questions.append(question)
+                seen_keys.add(question.key)
+            value = str(answer).strip()
+            if value:
+                answers[question.key] = value
+    return questions, answers
+
+
+def _render_assistant_chat(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    with ui.card().classes("surface-card w-full shadow-none"):
+        with ui.row().classes("w-full items-center gap-3"):
+            _render_owl_avatar("calm", "small")
+            with ui.column().classes("gap-0"):
+                ui.label("Fragen zum Fragebogen?").classes(
+                    "text-base font-semibold"
+                )
+                ui.label("Ich helfe Ihnen beim Ausfüllen.").classes(
+                    "text-xs text-slate-500"
+                )
+
+        with ui.scroll_area().classes(
+            "chat-shell w-full rounded-2xl bg-white/45 p-3 mt-3 max-h-[320px]"
+        ):
+            with ui.column().classes("w-full gap-3"):
+                if not session.assistant_messages:
+                    with ui.element("div").classes("chat-bubble chat-bubble--system"):
+                        ui.label("Assistenzsystem").classes(
+                            "text-[0.74rem] font-bold uppercase tracking-[0.16em] opacity-75"
+                        )
+                        ui.label(
+                            "Sie haben eine Frage zu einer der Fragebogen-Fragen "
+                            "oder einem Begriff? Schreiben Sie mir einfach – ich "
+                            "erkläre es Ihnen gern."
+                        ).classes("whitespace-pre-wrap text-[0.97rem] leading-7")
+                else:
+                    for entry in session.assistant_messages:
+                        _render_message(entry)
+
+        ui.textarea(placeholder="Ihre Frage …").props(
+            "outlined rows=2 autogrow"
+        ).classes("w-full mt-3").bind_value(session, "assistant_input_text")
+
+        async def _on_send() -> None:
+            text = (session.assistant_input_text or "").strip()
+            if not text:
+                ui.notify("Bitte geben Sie zuerst eine Frage ein.", color="warning")
+                return
+
+            session.assistant_messages.append(
+                ChatEntry(role="user", text=text, tone="user")
+            )
+            session.assistant_input_text = ""
+
+            questions, answers = _collect_questions_and_answers(session)
+            history = [
+                (entry.role, entry.text)
+                for entry in session.assistant_messages[:-1]
+            ]
+
+            with ui.dialog() as loading_dialog, ui.card().classes(
+                "items-center gap-4 p-6"
+            ):
+                loading_dialog.props("persistent")
+                ui.spinner(size="lg", color="#0f766e")
+                ui.label("Einen Moment, ich überlege …").classes(
+                    "text-base font-medium"
+                )
+            loading_dialog.open()
+
+            try:
+                reply = await run.io_bound(
+                    answer_question, text, questions, answers, history
+                )
+            finally:
+                loading_dialog.close()
+
+            session.assistant_messages.append(
+                ChatEntry(role="system", text=reply, tone="system")
+            )
+            if session.speech_enabled and reply:
+                _speak_text(reply)
+            refresh_ui()
+
+        with ui.row().classes("w-full justify-end mt-2"):
+            ui.button(
+                "Senden", icon="send", on_click=_on_send
+            ).props("unelevated").classes("bg-[#0f766e] text-white")
+
+
 def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     ctrl = session.primary_controller
     with ui.card().classes("surface-card w-full shadow-none"):
@@ -3990,6 +4107,13 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 ).props("outline").classes("grow")
 
     _render_avatar(session, refresh_ui)
+
+    if (
+        ctrl is not None
+        and ctrl.state == DialogueState.ANAMNESIS
+        and session.chat_phase_done
+    ):
+        _render_assistant_chat(session, refresh_ui)
 
     if ctrl is not None and session.current_patient is not None:
         with ui.card().classes("surface-card w-full shadow-none"):
