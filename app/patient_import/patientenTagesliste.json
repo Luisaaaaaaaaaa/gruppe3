@@ -706,22 +706,16 @@
   {
     "schema_version": "1.0",
     "source_system": {
-      "name": "SET-Anamnese",
-      "version": "1.0"
+      "system_type": "Praxisverwaltungssystem",
+      "system_name": "Beispiel-PVS",
+      "exported_at": "2026-06-24T10:00:00+02:00",
+      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
     },
     "patient": {
-      "patient_id": "MAN-0002",
       "status": "aktiv",
-      "stammdaten": {
-        "vorname": "Luisa",
-        "nachname": "",
-        "geburtsdatum": "1922-02-04",
-        "geschlecht": "",
-        "sprache": ""
-      },
       "kontakt": {
         "adresse": {
-          "ort": ""
+          "ort": "Mannheim"
         },
         "telefon": ""
       },
@@ -735,9 +729,20 @@
       },
       "medizinische_uebersicht": {
         "allergien": [],
-        "risikofaktoren": {},
+        "risikofaktoren": {
+          "rauchen": "nie",
+          "alkohol": "gelegentlich",
+          "bmi": 22.3
+        },
         "dauerdiagnosen": [],
-        "akutdiagnosen": [],
+        "akutdiagnosen": [
+          {
+            "icd10": "J06.9",
+            "bezeichnung": "Akute Infektion der oberen Atemwege",
+            "diagnosesicherheit": "gesichert",
+            "datum": "2026-06-24"
+          }
+        ],
         "medikation": {
           "dauermedikation": [],
           "bedarfsmedikation": []
@@ -746,6 +751,329 @@
       "termine": {
         "naechster_termin": null,
         "offene_aufgaben": []
+      },
+      "patient_id": "MAN-0002",
+      "stammdaten": {
+        "vorname": "Luisa",
+        "nachname": "Kolb",
+        "geburtsdatum": "1991-08-22",
+        "geschlecht": "weiblich",
+        "sprache": "de"
+      },
+      "vorbereitete_szenarien": [
+        "A"
+      ],
+      "letzte_messwerte": {
+        "vitalwerte": [
+          {
+            "datum": "2026-06-24",
+            "blutdruck_mmHg": "118/76",
+            "puls_pro_min": 72,
+            "gewicht_kg": 62.0,
+            "groesse_cm": 168,
+            "temperatur_c": 36.8,
+            "sauerstoffsaettigung_prozent": 99
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "system_type": "Praxisverwaltungssystem",
+      "system_name": "Beispiel-PVS",
+      "exported_at": "2026-06-24T10:00:00+02:00",
+      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+    },
+    "patient": {
+      "status": "aktiv",
+      "kontakt": {
+        "adresse": {
+          "ort": "Mannheim"
+        },
+        "telefon": ""
+      },
+      "versicherung": {
+        "krankenkasse": {
+          "name": ""
+        }
+      },
+      "administrativ": {
+        "patientenhinweise": [
+          "Gehbehinderung, kurze Wartezeiten bevorzugt."
+        ]
+      },
+      "medizinische_uebersicht": {
+        "allergien": [
+          {
+            "substanz": "Penicillin",
+            "reaktion": "Anaphylaxie",
+            "schweregrad": "hoch",
+            "gesichert": true
+          }
+        ],
+        "risikofaktoren": {
+          "rauchen": "Ex-Raucherin, 30 Packungsjahre, Rauchstopp 2015",
+          "alkohol": "selten",
+          "bmi": 28.9,
+          "familienanamnese": [
+            "Vater: Myokardinfarkt mit 58 Jahren"
+          ]
+        },
+        "dauerdiagnosen": [
+          {
+            "icd10": "I25.13",
+            "bezeichnung": "Atherosklerotische Herzkrankheit mit Angina pectoris",
+            "diagnosesicherheit": "gesichert",
+            "seit": "2020-06-15",
+            "relevant": true
+          }
+        ],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [
+            {
+              "wirkstoff": "ASS",
+              "praeparat": "ASS 100 mg Tabletten",
+              "dosierung": "0-0-1",
+              "hinweis": ""
+            },
+            {
+              "wirkstoff": "Bisoprolol",
+              "praeparat": "Bisoprolol 2,5 mg Tabletten",
+              "dosierung": "1-0-0",
+              "hinweis": "Pulskontrolle"
+            }
+          ],
+          "bedarfsmedikation": []
+        }
+      },
+      "termine": {
+        "naechster_termin": null,
+        "offene_aufgaben": []
+      },
+      "patient_id": "PRA-0007331",
+      "stammdaten": {
+        "vorname": "Vanessa",
+        "nachname": "Heil",
+        "geburtsdatum": "1958-11-03",
+        "geschlecht": "weiblich",
+        "sprache": "de"
+      },
+      "vorbereitete_szenarien": [
+        "B"
+      ],
+      "letzte_messwerte": {
+        "vitalwerte": [
+          {
+            "datum": "2026-06-20",
+            "blutdruck_mmHg": "145/88",
+            "puls_pro_min": 82,
+            "gewicht_kg": 76.0,
+            "groesse_cm": 164,
+            "temperatur_c": 36.7,
+            "sauerstoffsaettigung_prozent": 97
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "system_type": "Praxisverwaltungssystem",
+      "system_name": "Beispiel-PVS",
+      "exported_at": "2026-06-24T10:00:00+02:00",
+      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+    },
+    "patient": {
+      "status": "aktiv",
+      "kontakt": {
+        "adresse": {
+          "ort": "Mannheim"
+        },
+        "telefon": ""
+      },
+      "versicherung": {
+        "krankenkasse": {
+          "name": ""
+        }
+      },
+      "administrativ": {
+        "patientenhinweise": [
+          "Naechster Termin zur Blutdruckkontrolle."
+        ]
+      },
+      "medizinische_uebersicht": {
+        "allergien": [
+          {
+            "substanz": "Sulfonamide",
+            "reaktion": "Arzneimittelexanthem",
+            "schweregrad": "mittel",
+            "gesichert": true
+          }
+        ],
+        "risikofaktoren": {
+          "rauchen": "nie",
+          "alkohol": "gelegentlich",
+          "bmi": 31.2,
+          "familienanamnese": [
+            "Mutter: arterielle Hypertonie",
+            "Vater: Diabetes mellitus Typ 2"
+          ]
+        },
+        "dauerdiagnosen": [
+          {
+            "icd10": "I10.90",
+            "bezeichnung": "Essentielle Hypertonie, nicht naeher bezeichnet",
+            "diagnosesicherheit": "gesichert",
+            "seit": "2019-03-10",
+            "relevant": true
+          },
+          {
+            "icd10": "E78.0",
+            "bezeichnung": "Reine Hypercholesterinaemie",
+            "diagnosesicherheit": "gesichert",
+            "seit": "2019-03-10",
+            "relevant": true
+          }
+        ],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [
+            {
+              "wirkstoff": "Amlodipin",
+              "praeparat": "Amlodipin 5 mg Tabletten",
+              "dosierung": "1-0-0",
+              "hinweis": "Blutdruckkontrolle"
+            },
+            {
+              "wirkstoff": "Atorvastatin",
+              "praeparat": "Atorvastatin 20 mg Filmtabletten",
+              "dosierung": "0-0-1",
+              "hinweis": ""
+            }
+          ],
+          "bedarfsmedikation": []
+        }
+      },
+      "termine": {
+        "naechster_termin": null,
+        "offene_aufgaben": []
+      },
+      "patient_id": "PRA-0008442",
+      "stammdaten": {
+        "vorname": "Mia",
+        "nachname": "Schatschneider",
+        "geburtsdatum": "1973-06-18",
+        "geschlecht": "weiblich",
+        "sprache": "de"
+      },
+      "vorbereitete_szenarien": [
+        "C"
+      ],
+      "letzte_messwerte": {
+        "vitalwerte": [
+          {
+            "datum": "2026-06-22",
+            "blutdruck_mmHg": "152/94",
+            "puls_pro_min": 76,
+            "gewicht_kg": 85.0,
+            "groesse_cm": 165,
+            "temperatur_c": 36.9,
+            "sauerstoffsaettigung_prozent": 98
+          }
+        ]
+      }
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "system_type": "Praxisverwaltungssystem",
+      "system_name": "Beispiel-PVS",
+      "exported_at": "2026-06-24T10:00:00+02:00",
+      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+    },
+    "patient": {
+      "status": "aktiv",
+      "kontakt": {
+        "adresse": {
+          "ort": "Mannheim"
+        },
+        "telefon": ""
+      },
+      "versicherung": {
+        "krankenkasse": {
+          "name": ""
+        }
+      },
+      "administrativ": {
+        "patientenhinweise": [
+          "Nuechtern einbestellen, HbA1c-Kontrolle."
+        ]
+      },
+      "medizinische_uebersicht": {
+        "allergien": [],
+        "risikofaktoren": {
+          "rauchen": "taeglich, 15 Zigaretten",
+          "alkohol": "haeufig",
+          "bmi": 33.5,
+          "familienanamnese": [
+            "Vater: Diabetes mellitus Typ 2",
+            "Mutter: Adipositas"
+          ]
+        },
+        "dauerdiagnosen": [
+          {
+            "icd10": "E11.9",
+            "bezeichnung": "Diabetes mellitus Typ 2 ohne Komplikationen",
+            "diagnosesicherheit": "gesichert",
+            "seit": "2021-08-12",
+            "relevant": true
+          }
+        ],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [
+            {
+              "wirkstoff": "Metformin",
+              "praeparat": "Metformin 850 mg Filmtabletten",
+              "dosierung": "1-0-1",
+              "hinweis": "zu den Mahlzeiten"
+            }
+          ],
+          "bedarfsmedikation": []
+        }
+      },
+      "termine": {
+        "naechster_termin": null,
+        "offene_aufgaben": []
+      },
+      "patient_id": "PRA-0009553",
+      "stammdaten": {
+        "vorname": "Mickey",
+        "nachname": "Maus",
+        "geburtsdatum": "1979-01-30",
+        "geschlecht": "maennlich",
+        "sprache": "de"
+      },
+      "vorbereitete_szenarien": [
+        "D"
+      ],
+      "letzte_messwerte": {
+        "vitalwerte": [
+          {
+            "datum": "2026-06-15",
+            "blutdruck_mmHg": "135/82",
+            "puls_pro_min": 74,
+            "gewicht_kg": 102.0,
+            "groesse_cm": 175,
+            "temperatur_c": 36.6,
+            "sauerstoffsaettigung_prozent": 97
+          }
+        ]
       }
     }
   }
