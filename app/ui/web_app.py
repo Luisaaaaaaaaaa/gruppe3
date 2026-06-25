@@ -3129,33 +3129,6 @@ def _render_reject_consent_overlay(
                 )
 
 
-def _render_avatar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
-    avatar = _get_avatar_state(session)
-
-    with ui.card().classes("surface-card w-full shadow-none avatar-container"):
-        with ui.row().classes("avatar-panel w-full items-center gap-4"):
-            _render_owl_avatar(avatar["tone"])
-            with ui.column().classes("gap-1"):
-                ui.label(avatar["title"]).classes("text-base font-semibold")
-                ui.label(avatar["subtitle"]).classes(
-                    "text-sm leading-6 text-slate-600"
-                )
-
-        if session.stage == "dialogue" and session.primary_controller is not None:
-            ui.button(
-                "Avatar begruessen",
-                on_click=lambda: _on_avatar_click(),
-            ).props("outline").classes("mt-4 w-full")
-
-
-def _on_avatar_click() -> None:
-    ui.notify(
-        "Willkommen, ich begleite Sie durch die Anamnese.",
-        color="info",
-        position="bottom-right",
-    )
-
-
 def _toggle_speech(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     session.speech_enabled = not session.speech_enabled
     if not session.speech_enabled:
@@ -3988,19 +3961,19 @@ def _collect_questions_and_answers(
 def _render_assistant_chat(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
-    with ui.card().classes("surface-card w-full shadow-none"):
-        with ui.row().classes("w-full items-center gap-3"):
-            _render_owl_avatar("calm", "small")
-            with ui.column().classes("gap-0"):
+    with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
+        with ui.row().classes("avatar-panel w-full items-center gap-4"):
+            _render_owl_avatar("listening", "large")
+            with ui.column().classes("gap-1"):
                 ui.label("Fragen zum Fragebogen?").classes(
-                    "text-base font-semibold"
+                    "text-lg font-semibold"
                 )
                 ui.label("Ich helfe Ihnen beim Ausfüllen.").classes(
-                    "text-xs text-slate-500"
+                    "text-sm text-slate-500"
                 )
 
         with ui.scroll_area().classes(
-            "chat-shell w-full rounded-2xl bg-white/45 p-3 mt-3 max-h-[320px]"
+            "chat-shell w-full rounded-2xl bg-white/45 p-3 mt-3"
         ):
             with ui.column().classes("w-full gap-3"):
                 if not session.assistant_messages:
@@ -4105,8 +4078,6 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                     "Abmelden",
                     on_click=lambda: _reset_browser_session(session, refresh_ui),
                 ).props("outline").classes("grow")
-
-    _render_avatar(session, refresh_ui)
 
     if (
         ctrl is not None
