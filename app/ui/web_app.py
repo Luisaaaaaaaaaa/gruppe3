@@ -4153,14 +4153,13 @@ def _render_assistant_chat(
 
 def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     ctrl = session.primary_controller
-    with ui.card().classes("surface-card w-full shadow-none"):
-        ui.label("Sitzung").classes("eyebrow")
-        ui.label(_format_patient_name(session.current_patient)).classes(
-            "text-xl font-semibold"
-        )
 
-
-        if session.current_patient is not None:
+    if session.current_patient is not None:
+        with ui.card().classes("surface-card w-full shadow-none"):
+            ui.label("Sitzung").classes("eyebrow")
+            ui.label(_format_patient_name(session.current_patient)).classes(
+                "text-xl font-semibold"
+            )
             ui.label(f"Patienten-ID: {session.current_patient.patient_id}").classes(
                 "text-sm text-slate-500"
             )
@@ -4172,22 +4171,17 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                     "text-sm text-slate-500"
                 )
 
-        if ctrl is not None:
-            ui.label(f"Aktuelle Phase: {ctrl.phase_label}").classes(
-                "status-chip tone-info w-fit"
-            )
+            if ctrl is not None:
+                ui.label(f"Aktuelle Phase: {ctrl.phase_label}").classes(
+                    "status-chip tone-info w-fit"
+                )
 
-        with ui.row().classes("w-full gap-3"):
-            ui.button("Neu starten", on_click=lambda: _reset_browser_session(
-                session, refresh_ui
-            )).props(
-                "outline"
-            ).classes("grow")
-            if session.stage == "scenario":
-                ui.button(
-                    "Abmelden",
-                    on_click=lambda: _reset_browser_session(session, refresh_ui),
-                ).props("outline").classes("grow")
+            with ui.row().classes("w-full gap-3"):
+                ui.button("Neu starten", on_click=lambda: _reset_browser_session(
+                    session, refresh_ui
+                )).props(
+                    "outline"
+                ).classes("grow")
 
     if (
         ctrl is not None
