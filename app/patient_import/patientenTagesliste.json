@@ -996,13 +996,19 @@
   {
     "schema_version": "1.0",
     "source_system": {
-      "system_type": "Praxisverwaltungssystem",
-      "system_name": "Beispiel-PVS",
-      "exported_at": "2026-06-24T10:00:00+02:00",
-      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+      "name": "SET-Anamnese",
+      "version": "1.0"
     },
     "patient": {
+      "patient_id": "PRA-0009553",
       "status": "aktiv",
+      "stammdaten": {
+        "vorname": "Mickey",
+        "nachname": "Maus",
+        "geburtsdatum": "1979-01-30",
+        "geschlecht": "männlich",
+        "sprache": "de"
+      },
       "kontakt": {
         "adresse": {
           "ort": "Mannheim"
@@ -1022,9 +1028,9 @@
       "medizinische_uebersicht": {
         "allergien": [],
         "risikofaktoren": {
+          "bmi": 33.5,
           "rauchen": "taeglich, 15 Zigaretten",
           "alkohol": "haeufig",
-          "bmi": 33.5,
           "familienanamnese": [
             "Vater: Diabetes mellitus Typ 2",
             "Mutter: Adipositas"
@@ -1033,20 +1039,17 @@
         "dauerdiagnosen": [
           {
             "icd10": "E11.9",
-            "bezeichnung": "Diabetes mellitus Typ 2 ohne Komplikationen",
-            "diagnosesicherheit": "gesichert",
-            "seit": "2021-08-12",
-            "relevant": true
+            "bezeichnung": "Diabetes mellitus Typ 2 ohne Komplikationen"
           }
         ],
         "akutdiagnosen": [],
         "medikation": {
           "dauermedikation": [
             {
-              "wirkstoff": "Metformin",
-              "praeparat": "Metformin 850 mg Filmtabletten",
+              "wirkstoff": "Metformin 850 mg Filmtabletten",
+              "praeparat": "Metformin",
               "dosierung": "1-0-1",
-              "hinweis": "zu den Mahlzeiten"
+              "hinweis": ""
             }
           ],
           "bedarfsmedikation": []
@@ -1056,30 +1059,9 @@
         "naechster_termin": null,
         "offene_aufgaben": []
       },
-      "patient_id": "PRA-0009553",
-      "stammdaten": {
-        "vorname": "Mickey",
-        "nachname": "Maus",
-        "geburtsdatum": "1979-01-30",
-        "geschlecht": "maennlich",
-        "sprache": "de"
-      },
       "vorbereitete_szenarien": [
         "D"
-      ],
-      "letzte_messwerte": {
-        "vitalwerte": [
-          {
-            "datum": "2026-06-15",
-            "blutdruck_mmHg": "135/82",
-            "puls_pro_min": 74,
-            "gewicht_kg": 102.0,
-            "groesse_cm": 175,
-            "temperatur_c": 36.6,
-            "sauerstoffsaettigung_prozent": 97
-          }
-        ]
-      }
+      ]
     }
   }
 ]

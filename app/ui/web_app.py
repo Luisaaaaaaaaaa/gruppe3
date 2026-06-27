@@ -1751,10 +1751,16 @@ def _open_new_patient_dialog(
 
             with ui.row().classes("w-full gap-3"):
                 with ui.column().classes("grow gap-0"):
+                    gender_options = ["", "männlich", "weiblich", "divers"]
+                    gender_value = (
+                        edit_patient.details.gender
+                        if edit_patient and edit_patient.details.gender in gender_options
+                        else ""
+                    )
                     geschlecht = ui.select(
-                        ["", "männlich", "weiblich", "divers"],
+                        gender_options,
                         label="Geschlecht",
-                        value=edit_patient.details.gender if edit_patient else "",
+                        value=gender_value,
                     ).props("outlined").classes("w-full")
                 with ui.column().classes("grow gap-0"):
                     groesse = ui.input(
