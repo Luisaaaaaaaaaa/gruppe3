@@ -2172,11 +2172,61 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
         elif ctrl.state == DialogueState.ANAMNESIS:
             _render_mass_anamnesis(session, refresh_ui)
 
+        elif session.summary_ready:
+            _render_red_flag_indicator(session)
         else:
             _render_guided_dialogue(session, refresh_ui)
 
     if session.summary_ready:
         _render_summary(session, refresh_ui)
+        ui.timer(
+            0.1,
+            lambda: ui.run_javascript("window.scrollTo(0, 0)"),
+            once=True,
+        )
+
+
+def _render_red_flag_indicator(session: BrowserSession) -> None:
+    ctrl = session.primary_controller
+    if ctrl is None or ctrl.summary is None:
+        return
+
+    summary_controllers = [
+        controller
+        for controller in (session.controllers or [ctrl])
+        if controller is not None and controller.summary is not None
+    ]
+    summaries = [
+        controller.summary
+        for controller in summary_controllers
+    ]
+    if not summaries:
+        summaries = [ctrl.summary]
+
+    red_flags = [rf for item in summaries for rf in item.red_flags]
+
+    if red_flags:
+        with ui.card().classes("surface-card w-full shadow-none"):
+            with ui.row().classes("w-full items-center gap-3 mb-3"):
+                ui.icon("warning", size="md").classes("text-red-600")
+                ui.label(
+                    f"{len(red_flags)} Red Flag{'s' if len(red_flags) != 1 else ''} erkannt"
+                ).classes("text-lg font-semibold text-red-700")
+            for rf in red_flags:
+                severity_color = "text-red-700" if rf.severity == "critical" else "text-amber-600"
+                severity_icon = "error" if rf.severity == "critical" else "warning"
+                with ui.row().classes("w-full items-start gap-2 py-1"):
+                    ui.icon(severity_icon, size="sm").classes(severity_color)
+                    with ui.column().classes("gap-0"):
+                        ui.label(rf.description).classes("text-sm text-slate-700")
+                        ui.label(rf.rule_id).classes("text-xs text-slate-400")
+    else:
+        with ui.card().classes("surface-card w-full shadow-none"):
+            with ui.row().classes("w-full items-center gap-3"):
+                ui.icon("check_circle", size="md").classes("text-green-600")
+                ui.label("Keine Red Flags erkannt").classes(
+                    "text-lg font-semibold text-green-700"
+                )
 
 
 def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
@@ -2242,13 +2292,15 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             ui.notify(f"PDF-Fehler: {exc}", color="negative")
 
     def _render_summary_actions(sticky: bool = False) -> None:
+        editing_blocked = bool(red_flags)
         if sticky:
             with ui.card().classes("sticky-summary-actions w-full shadow-none"):
                 with ui.row().classes("w-full justify-center gap-3 flex-wrap items-center p-3"):
-                    ui.button(
-                        "Antworten bearbeiten",
-                        on_click=lambda: _start_editing(session, refresh_ui),
-                    ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+                    if not editing_blocked:
+                        ui.button(
+                            "Antworten bearbeiten",
+                            on_click=lambda: _start_editing(session, refresh_ui),
+                        ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
 
                     ui.button(
                         "Als PDF exportieren",
@@ -2259,16 +2311,24 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             return
 
         with ui.row().classes("w-full justify-center gap-3 mt-6 flex-wrap"):
-            ui.button(
-                "Antworten bearbeiten",
-                on_click=lambda: _start_editing(session, refresh_ui),
-            ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
+            if not editing_blocked:
+                ui.button(
+                    "Antworten bearbeiten",
+                    on_click=lambda: _start_editing(session, refresh_ui),
+                ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
 
             ui.button(
                 "Als PDF exportieren",
                 on_click=_download_pdf,
             ).props("outline").classes(
                 "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
+            )
+
+    with ui.card().classes("surface-card w-full shadow-none"):
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.icon("check_circle", size="md").classes("text-green-600")
+            ui.label("Die Daten wurden erfolgreich gespeichert.").classes(
+                "text-lg font-semibold text-green-700"
             )
 
     with ui.card().classes("surface-card w-full shadow-none"):
@@ -4148,10 +4208,11 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                         ui.notify(f"PDF-Fehler: {exc}", color="negative")
 
                 with ui.column().classes("w-full gap-3 mt-3"):
-                    ui.button(
-                        "Antworten bearbeiten",
-                        on_click=lambda: _start_editing(session, refresh_ui),
-                    ).props("unelevated").classes("w-full bg-[#0f766e] text-white")
+                    if not ctrl.summary.red_flags:
+                        ui.button(
+                            "Antworten bearbeiten",
+                            on_click=lambda: _start_editing(session, refresh_ui),
+                        ).props("unelevated").classes("w-full bg-[#0f766e] text-white")
                     ui.button(
                         "Als PDF exportieren",
                         on_click=_download_pdf_from_sidebar,
