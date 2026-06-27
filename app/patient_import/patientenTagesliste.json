@@ -700,7 +700,12 @@
           "hinweis": "Terminlicher Hinweis"
         },
         "offene_aufgaben": []
-      }
+      },
+      "vorbereitete_szenarien": [
+        "A",
+        "B",
+        "C"
+      ]
     }
   },
   {

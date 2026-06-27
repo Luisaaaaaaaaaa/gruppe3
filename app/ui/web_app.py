@@ -1522,12 +1522,22 @@ def _render_scenario_selection(
     recommended = _get_recommended_scenario_key(session)
     recommended_ui_key = SCENARIO_KEY_TO_UI.get(recommended) if recommended else None
 
-    selected: set[str] = set()
+    patient = session.current_patient
+    has_prepared = getattr(patient, "prepared_scenarios_saved", False) if patient else False
+    prepared_keys = set(getattr(patient, "prepared_scenarios", ())) if has_prepared else set()
+
+    selected: set[str] = set(prepared_keys)
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         ui.label("Szenarien auswählen").classes("text-2xl font-semibold")
 
-        if recommended_ui_key:
+        if has_prepared and prepared_keys:
+            titles = [_get_scenario_title(k) for k in sorted(prepared_keys)]
+            ui.label(
+                "Vom Praxispersonal vorbereitet: %s"
+                % ", ".join(titles)
+            ).classes("tone-success status-chip w-fit")
+        elif recommended_ui_key:
             ui.label(
                 "Basierend auf Ihren Vorerkrankungen wird Szenario %s (%s) empfohlen."
                 % (recommended_ui_key, next(s["title"] for s in SCENARIOS if s["key"] == recommended_ui_key))
@@ -1535,11 +1545,12 @@ def _render_scenario_selection(
 
         with ui.row().classes("w-full gap-4 flex-wrap"):
             for scenario in SCENARIOS:
-                is_recommended = scenario["key"] == recommended_ui_key
+                is_prechecked = scenario["key"] in selected
+                is_recommended = scenario["key"] == recommended_ui_key and not has_prepared
                 card_classes = (
                     "surface-card scenario-card min-w-[240px] grow shadow-none"
                 )
-                if is_recommended:
+                if is_prechecked:
                     card_classes += " border-[3px] border-[#17603d] bg-[#e3f5e9]"
 
                 with ui.card().classes(card_classes):
@@ -1550,7 +1561,11 @@ def _render_scenario_selection(
                         with ui.column().classes("gap-1"):
                             with ui.row().classes("items-center gap-2"):
                                 ui.label(f"Szenario {scenario['key']}").classes("eyebrow")
-                                if is_recommended:
+                                if is_prechecked and has_prepared:
+                                    ui.label("Vorbereitet").classes(
+                                        "status-chip tone-success text-[0.7rem]"
+                                    )
+                                elif is_recommended:
                                     ui.label("Empfohlen").classes(
                                         "status-chip tone-success text-[0.7rem]"
                                     )
@@ -1561,7 +1576,7 @@ def _render_scenario_selection(
                     ui.label(scenario["description"]).classes(
                         "text-[0.95rem] leading-6 text-slate-600"
                     )
-                    cb = ui.checkbox("Dieses Szenario auswählen")
+                    cb = ui.checkbox("Dieses Szenario auswählen", value=is_prechecked)
                     cb.on("update:model-value", lambda e, key=scenario["key"], cb=cb: (
                         selected.add(key) if e.args else selected.discard(key)
                     ))
@@ -1595,6 +1610,31 @@ def _select_patient_for_personal_mode(
             session.selected_scenarios = [recommended_ui_key] if recommended_ui_key else []
     session.login_message = ""
     session.login_tone = "tone-info"
+    refresh_ui()
+
+
+def _save_staff_scenarios(
+    session: BrowserSession, refresh_ui: Callable[[], None]
+) -> None:
+    if session.current_patient is None:
+        ui.notify("Kein Patient ausgewählt.", color="warning")
+        return
+    pid = session.current_patient.patient_id
+    scenarios = list(session.selected_scenarios)
+    client = PatientListClient(
+        Path("app/patient_import/patientenTagesliste.json")
+    )
+    client.update_prepared_scenarios(pid, scenarios)
+    global PATIENTS
+    PATIENTS = client.load_patients()
+    for p in PATIENTS:
+        if p.patient_id == pid:
+            session.current_patient = p
+            break
+    ui.notify(
+        f"Szenarien für {_format_patient_name(session.current_patient)} gespeichert.",
+        color="positive",
+    )
     refresh_ui()
 
 
@@ -2074,6 +2114,10 @@ def _render_staff_selection(
                 )
 
             with ui.row().classes("w-full justify-end gap-3"):
+                ui.button(
+                    "Szenarien speichern",
+                    on_click=lambda: _save_staff_scenarios(session, refresh_ui),
+                ).props("outline")
                 ui.button(
                     "Patientenmodus starten",
                     on_click=lambda: _handoff_to_patient(session, refresh_ui),
