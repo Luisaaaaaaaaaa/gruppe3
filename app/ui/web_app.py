@@ -3939,14 +3939,6 @@ def _render_mass_anamnesis_multi(
         session.show_cancel_dialog = True
         refresh_ui()
 
-    dedup_info = ""
-    if duplicate_keys:
-        key_labels = ", ".join(sorted(duplicate_keys))
-        dedup_info = (
-            f"Die Fragen {key_labels} werden in mehreren Szenarien verwendet "
-            "und daher nur einmal angezeigt."
-        )
-
     scenario_text = " + ".join(
         _get_scenario_title(k) for k in session.selected_scenarios
     )
@@ -3960,7 +3952,6 @@ def _render_mass_anamnesis_multi(
             f"Alle Fragen aus den ausgewählten Szenarien auf einen Blick. "
             f"Pflichtfelder sind mit * markiert. "
             f"Einige Fragen werden dynamisch ein- oder ausgeblendet."
-            + (f"\n\n{dedup_info}" if dedup_info else "")
         ),
         submit_label="Absenden",
         submit_callback=_on_submit,
