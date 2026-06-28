@@ -2555,6 +2555,7 @@ def _simulate_weight_in_form(
 
 
 def _build_question_form(
+    session: BrowserSession,
     controller: DialogueController,
     questions_with_answers: list[tuple],
     title: str,
@@ -3053,6 +3054,7 @@ def _build_question_form(
             return errors
 
         def _on_submit() -> None:
+            session.critical_confirmation_open = False
             errors = _collect_and_validate()
             if errors:
                 ui.notify(
@@ -3850,6 +3852,7 @@ def _render_mass_anamnesis_single(
         refresh_ui()
 
     _build_question_form(
+        session=session,
         controller=ctrl,
         questions_with_answers=questions_with_answers,
         title="Anamnese",
@@ -3958,6 +3961,7 @@ def _render_mass_anamnesis_multi(
     )
 
     _build_question_form(
+        session=session,
         controller=controllers[0],
         questions_with_answers=questions_with_answers,
         title=f"Anamnese — {scenario_text}",
@@ -4007,6 +4011,7 @@ def _render_answer_editor(
             ui.notify(str(exc), color="negative")
 
     _build_question_form(
+        session=session,
         controller=ctrl,
         questions_with_answers=questions_with_answers,
         title="Antworten bearbeiten",
