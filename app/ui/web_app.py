@@ -2341,39 +2341,6 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
         except Exception as exc:
             ui.notify(f"PDF-Fehler: {exc}", color="negative")
 
-    def _render_summary_actions(sticky: bool = False) -> None:
-        editing_blocked = bool(red_flags)
-        if sticky:
-            with ui.card().classes("sticky-summary-actions w-full shadow-none"):
-                with ui.row().classes("w-full justify-center gap-3 flex-wrap items-center p-3"):
-                    if not editing_blocked:
-                        ui.button(
-                            "Antworten bearbeiten",
-                            on_click=lambda: _start_editing(session, refresh_ui),
-                        ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
-
-                    ui.button(
-                        "Als PDF exportieren",
-                        on_click=_download_pdf,
-                    ).props("outline").classes(
-                        "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
-                    )
-            return
-
-        with ui.row().classes("w-full justify-center gap-3 mt-6 flex-wrap"):
-            if not editing_blocked:
-                ui.button(
-                    "Antworten bearbeiten",
-                    on_click=lambda: _start_editing(session, refresh_ui),
-                ).props("unelevated").classes("bg-[#0f766e] text-white min-w-[200px]")
-
-            ui.button(
-                "Als PDF exportieren",
-                on_click=_download_pdf,
-            ).props("outline").classes(
-                "border-[var(--app-accent)] text-[var(--app-accent)] min-w-[200px]"
-            )
-
     with ui.card().classes("surface-card w-full shadow-none"):
         with ui.row().classes("w-full items-center gap-3"):
             ui.icon("check_circle", size="md").classes("text-green-600")
@@ -2433,8 +2400,6 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 },
             )
 
-        _render_summary_actions(sticky=True)
-
         if any(item.grouped_sections for item in summaries):
             multiple_summaries = len(summaries) > 1
             for item in summaries:
@@ -2460,8 +2425,6 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
 
         if complete_answers:
             _render_summary_section("Vollständige Angaben", complete_answers)
-
-        _render_summary_actions()
 
 
 def _start_editing(
