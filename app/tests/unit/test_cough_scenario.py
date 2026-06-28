@@ -30,6 +30,10 @@ def test_cough_follow_ups_are_conditional() -> None:
     assert not controller.is_question_visible(
         "atemabhaengige_schmerzen", {"thorakale_schmerzen": "nein"}
     )
+    assert not controller.is_question_visible("spo2", {"dyspnoe": "nein"})
+    assert controller.is_question_visible("spo2", {"dyspnoe": "ja"})
+    assert controller.is_question_visible("spo2", {"zyanose": "ja"})
+    assert controller.is_question_visible("spo2", {"chronische_lungenerkrankung": "ja"})
 
 
 def test_general_shortness_of_breath_keeps_follow_up_questions_available() -> None:

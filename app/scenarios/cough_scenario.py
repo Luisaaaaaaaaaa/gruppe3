@@ -24,6 +24,15 @@ QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion("belastungsdyspnoe", "Bekommen Sie bei kleinen Anstrengungen, zum Beispiel beim Gehen oder Treppensteigen, schlechter Luft als sonst?", input_type="ja_nein"),
     AnamnesisQuestion("zyanose", "Sind Ihre Lippen oder Ihr Gesicht bläulich verfärbt?", input_type="ja_nein"),
     AnamnesisQuestion("auffaelliges_atemgeraeusch", "Hören Sie beim Einatmen ein neues lautes, pfeifendes oder ziehendes Geräusch?", input_type="ja_nein"),
+    AnamnesisQuestion(
+        "spo2",
+        "Falls eine Pulsoximetrie durchgefuehrt wurde: Wie hoch ist die Sauerstoffsaettigung in Prozent?",
+        input_type="zahl",
+        slider_min=70,
+        slider_max=100,
+        slider_step=1,
+        required=False,
+    ),
     AnamnesisQuestion("thorakale_schmerzen", "Haben Sie Schmerzen oder Druck in der Brust?", input_type="ja_nein"),
     AnamnesisQuestion("atemabhaengige_schmerzen", "Werden die Schmerzen beim tiefen Einatmen oder Husten stärker?", input_type="ja_nein"),
     AnamnesisQuestion("verwirrtheit", "Fühlen Sie sich plötzlich verwirrt oder können Sie sich ungewöhnlich schlecht orientieren?", input_type="ja_nein"),
@@ -38,3 +47,31 @@ QUESTIONS: list[AnamnesisQuestion] = [
     AnamnesisQuestion("risikofaktoren", "Rauchen Sie oder gab es kürzlich eine Reise beziehungsweise engen Kontakt zu Menschen mit einem Atemwegsinfekt? Bitte kurz beschreiben."),
     AnamnesisQuestion("atemfrequenz", "Falls Ihre Atemzüge eine Minute lang gezählt wurden: Wie viele waren es? Sonst können Sie 'nicht gemessen' schreiben.", required=False),
 ]
+
+
+PULSOXIMETER_TRIGGER_KEYS = {
+    "blutbeimengung",
+    "dyspnoe",
+    "ruhedyspnoe",
+    "sprechen_beeintraechtigt",
+    "belastungsdyspnoe",
+    "zyanose",
+    "auffaelliges_atemgeraeusch",
+    "thorakale_schmerzen",
+    "verwirrtheit",
+    "ohnmacht",
+    "reduzierter_allgemeinzustand",
+    "rauch_reizstoffe",
+    "rasche_verschlechterung",
+    "chronische_lungenerkrankung",
+    "herzschwaeche",
+    "immunschwaeche",
+}
+
+
+def should_offer_pulsoximeter(answers: dict[str, str]) -> bool:
+    """Pulsoximetry is offered only when respiratory warning signs justify it."""
+    return any(
+        (answers.get(key) or "").strip().lower() in ("ja", "j", "yes", "y")
+        for key in PULSOXIMETER_TRIGGER_KEYS
+    )

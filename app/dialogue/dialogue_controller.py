@@ -27,7 +27,10 @@ from app.scenarios.chest_pain_scenario import (
     QUESTIONS as CHEST_PAIN_QUESTIONS,
     berechne_marburger_herzscore,
 )
-from app.scenarios.cough_scenario import QUESTIONS as COUGH_QUESTIONS
+from app.scenarios.cough_scenario import (
+    QUESTIONS as COUGH_QUESTIONS,
+    should_offer_pulsoximeter,
+)
 from app.scenarios.diabetes_scenario import (
     QUESTIONS as DIABETES_QUESTIONS,
     berechne_diabetes_verlaufsuebersicht,
@@ -571,6 +574,8 @@ class DialogueController:
                 "sprechen_beeintraechtigt": "dyspnoe",
                 "atemabhaengige_schmerzen": "thorakale_schmerzen",
             }
+            if question_key == "spo2":
+                return should_offer_pulsoximeter(answers)
             parent_key = follow_ups.get(question_key)
             if parent_key:
                 parent_answer = (answers.get(parent_key) or "").strip().lower()
@@ -792,6 +797,7 @@ class DialogueController:
 
         answer_vitals = {
             "puls": "puls",
+            "spo2": "spo2",
             "gewicht": "gewicht",
             "gewicht_aktuell": "gewicht",
             "korpertemperatur": "temperatur",

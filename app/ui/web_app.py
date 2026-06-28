@@ -1086,6 +1086,14 @@ def _render_owl_avatar(tone: str, size: str = "large") -> None:
 
 def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
     ctrl = session.primary_controller
+    if session.critical_confirmation_open:
+        return {
+            "icon": "priority_high",
+            "tone": "alert",
+            "title": "Warnhinweis erkannt",
+            "subtitle": "Bitte den kritischen Wert prüfen und das Praxisteam informieren.",
+        }
+
     if ctrl is None:
         return {
             "icon": "sentiment_satisfied",
@@ -1121,8 +1129,8 @@ def _get_avatar_state(session: BrowserSession) -> dict[str, str]:
         return {
             "icon": "priority_high",
             "tone": "alert",
-            "title": "Eulen-Assistent",
-            "subtitle": "Ich achte auf Warnzeichen und informiere das Team.",
+            "title": "Warnhinweis erkannt",
+            "subtitle": "Bitte sofort das Praxisteam informieren.",
         }
 
     if ctrl.state in (DialogueState.SUMMARY, DialogueState.HANDOVER, DialogueState.END):
@@ -2214,6 +2222,13 @@ def _render_dialogue(session: BrowserSession, refresh_ui: Callable[[], None]) ->
                 ui.label(ctrl.phase_label).classes("eyebrow")
                 if session.anamnesis_mode is not None:
                     ui.label("Assistierte Anamnese").classes("text-2xl font-semibold")
+            if session.chat_phase_done or ctrl.state != DialogueState.ANAMNESIS:
+                avatar = _get_avatar_state(session)
+                with ui.row().classes("avatar-panel items-center gap-3"):
+                    _render_owl_avatar(avatar["tone"], "medium")
+                    with ui.column().classes("gap-0"):
+                        ui.label(avatar["title"]).classes("text-sm font-semibold")
+                        ui.label(avatar["subtitle"]).classes("text-xs text-slate-500")
 
         if ctrl.state in (
             DialogueState.EXPLAIN_ROLE,
@@ -2392,12 +2407,14 @@ def _render_summary(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
                 "systolisch": "Systolisch",
                 "diastolisch": "Diastolisch",
                 "puls": "Puls",
+                "spo2": "SpO2",
                 "gewicht": "Gewicht",
             }
             _vital_units = {
                 "systolisch": "mmHg",
                 "diastolisch": "mmHg",
                 "puls": "bpm",
+                "spo2": "%",
                 "gewicht": "kg",
             }
             _render_summary_section(
@@ -2491,6 +2508,38 @@ def _simulate_pulse(fields: dict[str, object]) -> dict[str, int] | None:
     puls_field.slider.set_value(simulated)
     puls_field.number_input.set_value(simulated)
     return {"puls": simulated}
+
+
+def _simulate_oximeter_in_form(
+    fields: dict[str, object], controller: DialogueController
+) -> dict[str, int] | None:
+    spo2_field = fields.get("spo2")
+    if not isinstance(spo2_field, _SliderField):
+        return None
+    patient = controller.get_patient()
+    sim = Simulator(
+        geschlecht=patient.details.gender,
+        groesse_cm=patient.details.groesse_cm,
+        alter=_calculate_age(patient.date_of_birth),
+    )
+    result = sim.pulsoximeter()
+    _set_field_source(spo2_field, "simuliert")
+    spo2_field.slider.enable()
+    spo2_field.number_input.enable()
+    spo2_field.unknown_checkbox.set_value(False)
+    spo2_field.slider.set_value(result["spo2"])
+    spo2_field.number_input.set_value(result["spo2"])
+
+    puls_field = fields.get("puls")
+    if isinstance(puls_field, _SliderField):
+        _set_field_source(puls_field, "simuliert")
+        puls_field.slider.enable()
+        puls_field.number_input.enable()
+        puls_field.unknown_checkbox.set_value(False)
+        puls_field.slider.set_value(result["puls"])
+        puls_field.number_input.set_value(result["puls"])
+
+    return result
 
 
 def _simulate_blood_pressure(fields: dict[str, object]) -> dict[str, int] | None:
@@ -2588,6 +2637,7 @@ def _build_question_form(
         sources: dict[str, str] = {}
         source_keys = {
             "puls": "puls",
+            "spo2": "spo2",
             "gewicht": "gewicht",
             "gewicht_aktuell": "gewicht",
             "korpertemperatur": "temperatur",
@@ -2654,6 +2704,13 @@ def _build_question_form(
         _refresh_visibility()
         _run_live_escalation()
 
+    def _vital_kind_for_answer(answer_key: str) -> str:
+        if answer_key == "puls":
+            return "pulse"
+        if answer_key == "spo2":
+            return "oximeter"
+        return "weight"
+
     def _simulate_pulse_and_check() -> None:
         result = _simulate_pulse(fields)
         if result is None:
@@ -2662,6 +2719,15 @@ def _build_question_form(
             return
         if simulator_update_callback is not None:
             simulator_update_callback("pulse", result)
+
+    def _simulate_oximeter_and_check() -> None:
+        result = _simulate_oximeter_in_form(fields, controller)
+        if result is None:
+            return
+        if _run_live_escalation():
+            return
+        if simulator_update_callback is not None:
+            simulator_update_callback("oximeter", result)
 
     def _simulate_blood_pressure_and_check() -> None:
         result = _simulate_blood_pressure(fields)
@@ -2891,7 +2957,7 @@ def _build_question_form(
                             init_val = min_val
 
                         init_val = max(min_val, min(max_val, init_val))
-                        vital_slider_keys = {"puls", "gewicht", "gewicht_aktuell"}
+                        vital_slider_keys = {"puls", "spo2", "gewicht", "gewicht_aktuell"}
                         is_unknown = (
                             key in vital_slider_keys
                             and not str(effective_answer).strip()
@@ -2934,12 +3000,12 @@ def _build_question_form(
                                 lambda e, s=slider, inp=number_input, answer_key=key: (
                                     _handle_unknown_vital_change(
                                         bool(e.value),
-                                        "pulse" if answer_key == "puls" else "weight",
+                                        _vital_kind_for_answer(answer_key),
                                         answer_key,
                                         s,
                                         inp,
                                     )
-                                    if answer_key in ("puls", "gewicht", "gewicht_aktuell")
+                                    if answer_key in ("puls", "spo2", "gewicht", "gewicht_aktuell")
                                     else (
                                         _set_unknown_state(e.value, s, inp),
                                         _refresh_visibility(),
@@ -2955,7 +3021,7 @@ def _build_question_form(
                             fields[key].info_label = ui.label("").classes(
                                 "text-sm font-medium text-slate-600"
                             )
-                        if key in ("puls", "gewicht", "gewicht_aktuell"):
+                        if key in ("puls", "spo2", "gewicht", "gewicht_aktuell"):
                             source_label = ui.label(
                                 "Ausgewählt: manuelle Eingabe"
                             ).classes("text-sm font-medium text-[#0f766e]")
@@ -2971,7 +3037,7 @@ def _build_question_form(
                                 "change",
                                 lambda _, field=fields[key], answer_key=key:
                                     _handle_manual_vital_change(
-                                        "pulse" if answer_key == "puls" else "weight",
+                                        _vital_kind_for_answer(answer_key),
                                         field,
                                     ),
                             )
@@ -2979,7 +3045,7 @@ def _build_question_form(
                                 "blur",
                                 lambda _, field=fields[key], answer_key=key:
                                     _handle_manual_vital_change(
-                                        "pulse" if answer_key == "puls" else "weight",
+                                        _vital_kind_for_answer(answer_key),
                                         field,
                                     ),
                             )
@@ -2987,6 +3053,11 @@ def _build_question_form(
                                 ui.button(
                                     "Puls-Simulator verwenden",
                                     on_click=_simulate_pulse_and_check,
+                                ).props("outline").classes("w-fit text-[#0f766e]")
+                            elif key == "spo2":
+                                ui.button(
+                                    "Pulsoximeter-Simulator verwenden",
+                                    on_click=_simulate_oximeter_and_check,
                                 ).props("outline").classes("w-fit text-[#0f766e]")
                             else:
                                 ui.button(
@@ -3599,9 +3670,15 @@ def _check_live_form_escalation(
         session.critical_confirmation_open = True
         dialog = ui.dialog().props("persistent")
         with dialog, ui.card().classes("w-[560px] max-w-full p-6"):
-            ui.label("Kritische Angabe bestätigen").classes(
-                "text-xl font-semibold text-[#9f1d20]"
-            )
+            with ui.row().classes("w-full items-center gap-4"):
+                _render_owl_avatar("alert", "medium")
+                with ui.column().classes("gap-1"):
+                    ui.label("Kritische Angabe bestätigen").classes(
+                        "text-xl font-semibold text-[#9f1d20]"
+                    )
+                    ui.label("Warnhinweis erkannt").classes(
+                        "text-sm font-medium text-[#9f1d20]"
+                    )
             ui.label(
                 "Mindestens eine Ihrer Angaben liegt in einem kritischen Bereich. "
                 "Bitte prüfen Sie den eingegebenen Messwert. Erst nach Ihrer "
@@ -3684,6 +3761,9 @@ def _device_prefilled_answers(session: BrowserSession) -> dict[str, str]:
             prefilled["gewicht"] = str(weight)
             prefilled["gewicht_aktuell"] = str(weight)
     if session.simulated_oximeter:
+        spo2 = session.simulated_oximeter.get("spo2")
+        if spo2 is not None:
+            prefilled["spo2"] = str(spo2)
         pulse = session.simulated_oximeter.get("puls")
         if pulse is not None:
             prefilled["puls"] = str(pulse)
@@ -3703,8 +3783,11 @@ def _device_prefilled_sources(session: BrowserSession) -> dict[str, str]:
         sources["diastolisch"] = "simuliert"
     if session.simulated_weight:
         sources["gewicht"] = "simuliert"
-    if session.simulated_oximeter and session.simulated_oximeter.get("puls") is not None:
-        sources["puls"] = "simuliert"
+    if session.simulated_oximeter:
+        if session.simulated_oximeter.get("spo2") is not None:
+            sources["spo2"] = "simuliert"
+        if session.simulated_oximeter.get("puls") is not None:
+            sources["puls"] = "simuliert"
     return sources
 
 
@@ -3726,6 +3809,11 @@ def _update_simulator_state_from_form(
     elif kind == "pulse":
         session.simulated_oximeter = {"puls": values["puls"]}
         vital_values = {"puls": values["puls"]}
+    elif kind == "oximeter":
+        session.simulated_oximeter = values
+        vital_values = {"spo2": values["spo2"]}
+        if values.get("puls") is not None:
+            vital_values["puls"] = values["puls"]
     else:
         return
 
@@ -3804,6 +3892,21 @@ def _clear_simulator_state_for_manual_input(
         for controller in controllers:
             if controller is not None:
                 controller.record_vitals({"puls": pulse}, "manuell eingegeben")
+        return
+
+    if kind == "oximeter":
+        session.simulated_oximeter = None
+        if "spo2" in answers:
+            session.prefilled_answers["spo2"] = answers["spo2"]
+        spo2 = _number_from_answer(answers.get("spo2"))
+        if spo2 is None:
+            for controller in controllers:
+                if controller is not None:
+                    controller.clear_vitals(("spo2",))
+            return
+        for controller in controllers:
+            if controller is not None:
+                controller.record_vitals({"spo2": spo2}, "manuell eingegeben")
 
 
 def _render_mass_anamnesis_single(
