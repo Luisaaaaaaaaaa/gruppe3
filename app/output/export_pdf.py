@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
 from app.output.summary_builder import AnamnesisSummary
 from app.patient_import.patient_schema import PatientRecord
+
+SEVERITY_TEXT_COLORS = {
+    "critical": "#9f1d20",
+    "warning": "#b55a07",
+    "info": "#60716d",
+}
 
 if TYPE_CHECKING:
     from reportlab.lib.styles import ParagraphStyle
@@ -26,6 +33,9 @@ def build_preview_html(
         _html_section("Patientendaten", rows),
     ]
 
+    if summary.red_flags:
+        html_parts.append(_html_section_raw("Red Flags", _red_flags_html(summary.red_flags)))
+
     if summary.grouped_sections:
         for title, fields in summary.grouped_sections.items():
             items = list(fields.items())
@@ -35,20 +45,6 @@ def build_preview_html(
 
     vitals_rows = _vital_rows(summary)
     html_parts.append(_html_section("Vitalparameter", vitals_rows))
-
-    if summary.red_flags:
-        rf_rows = [
-            '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%">'
-            '<tr style="background:#f0f0f0"><th>ID</th><th>Schwere</th><th>Beschreibung</th></tr>'
-        ]
-        for rf in summary.red_flags:
-            rf_rows.append(
-                f"<tr><td>{rf.rule_id}</td><td>{rf.severity}</td><td>{rf.description}</td></tr>"
-            )
-        rf_rows.append("</table>")
-        html_parts.append(
-            _html_section_raw("Red Flags", "".join(rf_rows))
-        )
 
     if summary.open_points:
         items = "".join(f"<li>{p}</li>" for p in summary.open_points)
@@ -65,8 +61,8 @@ def build_preview_html(
         "  body { font-family: 'Segoe UI', Arial, sans-serif; color: #17342f; margin: 30px; }\n"
         "  h1 { color: #0f766e; border-bottom: 2px solid #0f766e; padding-bottom: 6px; }\n"
         "  h2 { color: #17342f; margin-top: 20px; }\n"
-        "  table { border-collapse: collapse; width: 100%; margin: 8px 0; }\n"
-        "  td, th { padding: 6px 10px; text-align: left; border: 1px solid #ddd; }\n"
+        "  table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 8px 0; }\n"
+        "  td, th { padding: 6px 10px; text-align: left; border: 1px solid #ddd; overflow-wrap: anywhere; word-break: break-word; }\n"
         "  th { background: #d6efe9; font-weight: 600; }\n"
         "  .label { color: #60716d; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }\n"
         "  .value { font-size: 1em; }\n"
@@ -92,6 +88,24 @@ def _html_section_raw(title: str, html: str) -> str:
     return f"<h2>{title}</h2>{html}"
 
 
+def _red_flags_html(red_flags: list[Any]) -> str:
+    rows = [
+        '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%">'
+        '<tr style="background:#f0f0f0"><th>ID</th><th>Schwere</th><th>Beschreibung</th></tr>'
+    ]
+    for rf in red_flags:
+        severity_color = _severity_text_color(rf.severity)
+        severity_label = _severity_label(rf.severity)
+        rows.append(
+            f"<tr><td>{escape(str(rf.rule_id))}</td>"
+            f"<td style='color:{severity_color};font-weight:700'>"
+            f"{escape(severity_label)}</td>"
+            f"<td>{escape(str(rf.description))}</td></tr>"
+        )
+    rows.append("</table>")
+    return "".join(rows)
+
+
 def _vital_rows(summary: AnamnesisSummary) -> list[tuple[str, str]]:
     rows: list[tuple[str, str]] = []
     for key, value in summary.vitals.items():
@@ -115,8 +129,6 @@ def export_summary_pdf(
             Paragraph,
             SimpleDocTemplate,
             Spacer,
-            Table,
-            TableStyle,
         )
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
@@ -157,14 +169,35 @@ def export_summary_pdf(
         "LabelCustom",
         parent=styles["Normal"],
         textColor=HexColor("#60716d"),
+        fontName="Helvetica-Bold",
         fontSize=8,
         spaceAfter=1 * mm,
+        splitLongWords=1,
     )
     value_style = ParagraphStyle(
         "ValueCustom",
         parent=styles["Normal"],
         fontSize=10,
         spaceAfter=2 * mm,
+        splitLongWords=1,
+    )
+    severity_critical_style = ParagraphStyle(
+        "SeverityCritical",
+        parent=value_style,
+        textColor=danger_color,
+        fontName="Helvetica-Bold",
+    )
+    severity_warning_style = ParagraphStyle(
+        "SeverityWarning",
+        parent=value_style,
+        textColor=warning_color,
+        fontName="Helvetica-Bold",
+    )
+    severity_info_style = ParagraphStyle(
+        "SeverityInfo",
+        parent=value_style,
+        textColor=HexColor("#60716d"),
+        fontName="Helvetica-Bold",
     )
     small_style = ParagraphStyle(
         "SmallCustom",
@@ -201,7 +234,21 @@ def export_summary_pdf(
         ],
         label_style,
         value_style,
+        doc.width,
     )
+
+    if summary.red_flags:
+        _add_red_flags_section(
+            elements,
+            summary.red_flags,
+            heading_style,
+            label_style,
+            value_style,
+            severity_critical_style,
+            severity_warning_style,
+            severity_info_style,
+            doc.width,
+        )
 
     if summary.grouped_sections:
         for title, fields in summary.grouped_sections.items():
@@ -211,6 +258,7 @@ def export_summary_pdf(
                 list(fields.items()),
                 label_style,
                 value_style,
+                doc.width,
             )
     else:
         _add_section(
@@ -219,65 +267,87 @@ def export_summary_pdf(
             list(summary.answers.items()),
             label_style,
             value_style,
+            doc.width,
         )
 
     vitals_rows = _vital_rows(summary)
-    _add_section(elements, "Vitalparameter", vitals_rows, label_style, value_style)
-
-    if summary.red_flags:
-        elements.append(Paragraph("Red Flags", heading_style))
-        rf_data = [["ID", "Schwere", "Beschreibung"]]
-        for rf in summary.red_flags:
-            rf_data.append([rf.rule_id, _severity_label(rf.severity), rf.description])
-
-        rf_colors = []
-        for rf in summary.red_flags:
-            if rf.severity == "critical":
-                rf_colors.append(danger_color)
-            elif rf.severity == "warning":
-                rf_colors.append(warning_color)
-            else:
-                rf_colors.append(HexColor("#60716d"))
-
-        rf_table = Table(rf_data, colWidths=[50, 50, 380])
-        rf_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), HexColor("#f0f0f0")),
-                    ("GRID", (0, 0), (-1, -1), 0.5, HexColor("#e0e0e0")),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ]
-            )
-        )
-        for idx, color in enumerate(rf_colors):
-            rf_table.setStyle(
-                TableStyle(
-                    [
-                        (
-                            "TEXTCOLOR",
-                            (1, idx + 1),
-                            (1, idx + 1),
-                            color,
-                        ),
-                        ("FONTNAME", (1, idx + 1), (1, idx + 1), "Helvetica-Bold"),
-                    ]
-                )
-            )
-        elements.append(rf_table)
+    _add_section(
+        elements,
+        "Vitalparameter",
+        vitals_rows,
+        label_style,
+        value_style,
+        doc.width,
+    )
 
     if summary.open_points:
         elements.append(Paragraph("Offene Punkte", heading_style))
         for point in summary.open_points:
-            elements.append(Paragraph(f"&bull; {point}", value_style))
+            elements.append(Paragraph(f"&bull; {escape(str(point))}", value_style))
 
     doc.build(elements)
     return buf.getvalue()
+
+
+def _add_red_flags_section(
+    elements: list[Any],
+    red_flags: list[Any],
+    heading_style: "ParagraphStyle",
+    label_style: "ParagraphStyle",
+    value_style: "ParagraphStyle",
+    severity_critical_style: "ParagraphStyle",
+    severity_warning_style: "ParagraphStyle",
+    severity_info_style: "ParagraphStyle",
+    available_width: float,
+) -> None:
+    from reportlab.lib.colors import HexColor
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    elements.append(Paragraph("Red Flags", heading_style))
+    table_data = [
+        [
+            _wrap_pdf_cell("ID", label_style),
+            _wrap_pdf_cell("Schwere", label_style),
+            _wrap_pdf_cell("Beschreibung", label_style),
+        ]
+    ]
+    for red_flag in red_flags:
+        table_data.append(
+            [
+                _wrap_pdf_cell(red_flag.rule_id, value_style),
+                _wrap_pdf_cell(
+                    _severity_label(red_flag.severity),
+                    _severity_pdf_style(
+                        red_flag.severity,
+                        severity_critical_style,
+                        severity_warning_style,
+                        severity_info_style,
+                    ),
+                ),
+                _wrap_pdf_cell(red_flag.description, value_style),
+            ]
+        )
+
+    table = Table(
+        table_data,
+        colWidths=[available_width * 0.15, available_width * 0.17, available_width * 0.68],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), HexColor("#f0f0f0")),
+                ("GRID", (0, 0), (-1, -1), 0.5, HexColor("#e0e0e0")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    elements.append(table)
 
 
 def _add_section(
@@ -286,6 +356,7 @@ def _add_section(
     rows: list[tuple[str, str]],
     label_style: "ParagraphStyle",
     value_style: "ParagraphStyle",
+    available_width: float,
 ) -> None:
     from reportlab.lib.colors import HexColor
     from reportlab.lib.styles import ParagraphStyle
@@ -307,11 +378,19 @@ def _add_section(
 
     table_data = []
     for label, value in rows:
-        display_value = value if value and value.strip() else "keine Angabe"
-        table_data.append([label, display_value])
+        display_value = str(value) if value and str(value).strip() else "keine Angabe"
+        table_data.append(
+            [
+                _wrap_pdf_cell(label, label_style),
+                _wrap_pdf_cell(display_value, value_style),
+            ]
+        )
 
     if table_data:
-        tbl = Table(table_data, colWidths=[120, 330])
+        tbl = Table(
+            table_data,
+            colWidths=[available_width * 0.29, available_width * 0.71],
+        )
         tbl.setStyle(
             TableStyle(
                 [
@@ -329,6 +408,30 @@ def _add_section(
         elements.append(tbl)
 
     elements.append(Spacer(1, 2 * mm))
+
+
+def _wrap_pdf_cell(value: Any, style: "ParagraphStyle") -> Any:
+    from reportlab.platypus import Paragraph
+
+    text = escape(str(value)).replace("\n", "<br/>")
+    return Paragraph(text, style)
+
+
+def _severity_text_color(severity: str) -> str:
+    return SEVERITY_TEXT_COLORS.get(severity.lower(), SEVERITY_TEXT_COLORS["info"])
+
+
+def _severity_pdf_style(
+    severity: str,
+    critical_style: "ParagraphStyle",
+    warning_style: "ParagraphStyle",
+    info_style: "ParagraphStyle",
+) -> "ParagraphStyle":
+    if severity.lower() == "critical":
+        return critical_style
+    if severity.lower() == "warning":
+        return warning_style
+    return info_style
 
 
 def _severity_label(severity: str) -> str:

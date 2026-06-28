@@ -75,6 +75,8 @@ def test_export_summary_pdf_returns_pdf_bytes_with_key_content() -> None:
     assert "Erika Mustermann" in pdf_text
     assert "P-4711" in pdf_text
     assert "KRITISCH" in pdf_text
+    assert pdf_text.index("Patientendaten") < pdf_text.index("Red Flags")
+    assert pdf_text.index("Red Flags") < pdf_text.index("Verlauf")
 
 
 def test_preview_documents_source_for_each_vital() -> None:
@@ -95,3 +97,89 @@ def test_preview_documents_source_for_each_vital() -> None:
 
     assert "145 (Quelle: simuliert)" in html
     assert "78 (Quelle: manuell eingegeben)" in html
+
+
+def test_export_summary_pdf_handles_very_long_table_values() -> None:
+    patient = PatientRecord(
+        patient_id="P-LANG",
+        first_name="Lange",
+        last_name="Antwort",
+        date_of_birth="1980-01-01",
+        medications=[
+            "Sehr langes Praeparat mit vielen Details und Dosierungshinweisen",
+        ],
+        conditions="Hypertonie mit sehr langer Beschreibung der Begleiterkrankungen",
+    )
+    long_text = (
+        "Patient berichtet ueber seit mehreren Wochen bestehende Beschwerden "
+        "mit sehr ausfuehrlicher Beschreibung, inklusive freiem Text, "
+        "Medikationsdetails und einem langen ununterbrochenen Testwort "
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
+    )
+    summary = AnamnesisSummary(
+        patient_id=patient.patient_id,
+        patient_name=f"{patient.first_name} {patient.last_name}",
+        scenario="hypertension",
+        timestamp="2026-06-20T12:00:00",
+        answers={"sehr_lange_antwort": long_text},
+        red_flags=[
+            RedFlag(
+                rule_id="RF-SEHR-LANGE-ID-1234567890",
+                description=long_text,
+                severity="warning",
+                triggered_by="test",
+            )
+        ],
+    )
+
+    pdf_bytes = export_summary_pdf(summary, patient)
+
+    assert pdf_bytes.startswith(b"%PDF-1.4")
+
+
+def test_export_summary_pdf_marks_red_flag_severities() -> None:
+    patient = PatientRecord(patient_id="P-RF", first_name="Red", last_name="Flag")
+    summary = AnamnesisSummary(
+        patient_id=patient.patient_id,
+        patient_name=f"{patient.first_name} {patient.last_name}",
+        scenario="cough",
+        timestamp="2026-06-20T12:00:00",
+        red_flags=[
+            RedFlag(
+                rule_id="RF-CRIT",
+                description="Kritische Beschreibung",
+                severity="critical",
+                triggered_by="test",
+            ),
+            RedFlag(
+                rule_id="RF-WARN",
+                description="Warnende Beschreibung",
+                severity="warning",
+                triggered_by="test",
+            ),
+        ],
+    )
+
+    pdf_bytes = export_summary_pdf(summary, patient)
+    pdf_text = _extract_pdf_text(pdf_bytes)
+
+    assert "KRITISCH" in pdf_text
+    assert "WARNUNG" in pdf_text
+    assert ".623529 .113725 .12549 rg" in pdf_text
+    assert ".709804 .352941 .027451 rg" in pdf_text
+
+
+def test_preview_tables_wrap_long_content() -> None:
+    patient = PatientRecord(patient_id="P-1", first_name="Test", last_name="Person")
+    summary = AnamnesisSummary(
+        patient_id="P-1",
+        patient_name="Test Person",
+        scenario="C",
+        timestamp="2026-06-20T12:00:00",
+        answers={"lange_antwort": "A" * 120},
+    )
+
+    html = build_preview_html(summary, patient)
+
+    assert "table-layout: fixed" in html
+    assert "overflow-wrap: anywhere" in html
