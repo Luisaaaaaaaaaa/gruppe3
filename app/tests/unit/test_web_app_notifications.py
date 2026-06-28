@@ -5,6 +5,7 @@ import pytest
 
 from app.patient_import.patient_schema import PatientRecord
 from app.ui.web_app import (
+    _answer_yes_no,
     _complete_successful_login,
     _dismiss_critical_warning,
     _find_duplicate_patient,
@@ -14,6 +15,12 @@ from app.ui.web_app import (
     _reset_browser_session,
     _select_patient_for_personal_mode,
 )
+
+
+class _GuidedSessionStub(SimpleNamespace):
+    @property
+    def primary_controller(self):
+        return self.controller
 
 
 def test_dismiss_critical_warning_closes_only_red_flag_notifications(monkeypatch) -> None:
@@ -170,3 +177,57 @@ def test_successful_login_sets_patient_and_resets_state(monkeypatch) -> None:
     assert session.login_tone == "tone-info"
     assert session.login_blocked_until is None
     assert session.stage == "scenario"
+
+
+def test_guided_yes_no_critical_opens_confirmation_before_callback(monkeypatch) -> None:
+    callback_calls: list[str] = []
+    refresh_calls: list[bool] = []
+
+    controller = SimpleNamespace(
+        current_question=SimpleNamespace(key="akut_verwirrt_bewusstlos")
+    )
+    callback = lambda answer: callback_calls.append(answer)
+    session = _GuidedSessionStub(
+        controller=controller,
+        pending_input=callback,
+        messages=[],
+    )
+
+    def fake_live_check(session_arg, controllers, answers, refresh_ui, vitals=None):
+        assert session_arg is session
+        assert controllers == [controller]
+        assert answers == {"akut_verwirrt_bewusstlos": "ja"}
+        assert vitals is None
+        return True
+
+    monkeypatch.setattr("app.ui.web_app._check_live_form_escalation", fake_live_check)
+
+    _answer_yes_no(session, "ja", lambda: refresh_calls.append(True))
+
+    assert callback_calls == []
+    assert refresh_calls == []
+    assert session.pending_input is callback
+    assert session.messages == []
+
+
+def test_guided_yes_no_noncritical_continues_normally(monkeypatch) -> None:
+    callback_calls: list[str] = []
+    refresh_calls: list[bool] = []
+    controller = SimpleNamespace(current_question=SimpleNamespace(key="sehstoerungen"))
+    session = _GuidedSessionStub(
+        controller=controller,
+        pending_input=lambda answer: callback_calls.append(answer),
+        messages=[],
+    )
+
+    monkeypatch.setattr(
+        "app.ui.web_app._check_live_form_escalation",
+        lambda session, controllers, answers, refresh_ui, vitals=None: False,
+    )
+
+    _answer_yes_no(session, "nein", lambda: refresh_calls.append(True))
+
+    assert callback_calls == ["nein"]
+    assert refresh_calls == [True]
+    assert session.pending_input is None
+    assert session.messages[-1].text == "nein"

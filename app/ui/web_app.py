@@ -923,6 +923,18 @@ def _answer_yes_no(
 ) -> None:
     if session.pending_input is None:
         return
+
+    ctrl = session.primary_controller
+    current_q = ctrl.current_question if ctrl is not None else None
+    if ctrl is not None and current_q is not None:
+        if _check_live_form_escalation(
+            session,
+            [ctrl],
+            {current_q.key: answer},
+            refresh_ui,
+        ):
+            return
+
     session.messages.append(
         ChatEntry(role="user", text=answer, tone="user")
     )
@@ -1243,6 +1255,17 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
             return
 
         answer = (answer_input.value or "").strip()
+        ctrl = session.primary_controller
+        current_q = ctrl.current_question if ctrl is not None else None
+        if ctrl is not None and current_q is not None:
+            if _check_live_form_escalation(
+                session,
+                [ctrl],
+                {current_q.key: answer},
+                refresh_ui,
+            ):
+                return
+
         session.messages.append(
             ChatEntry(
                 role="user",
@@ -2605,9 +2628,11 @@ def _build_question_form(
             _run_live_escalation()
         return _handler
 
-    def _mark_manual_vital(kind: str, field: object | None = None) -> None:
+    def _handle_manual_vital_change(kind: str, field: object | None = None) -> None:
         if field is not None:
             _set_field_source(field, "manuell eingegeben")
+        if _run_live_escalation():
+            return
         if manual_vital_callback is not None:
             manual_vital_callback(kind, _collect_values())
 
@@ -2624,27 +2649,37 @@ def _build_question_form(
             and getattr(field, "measurement_source", "") == "simuliert"
         )
         if not simulator_just_supplied_value:
-            _mark_manual_vital(kind, field)
+            _handle_manual_vital_change(kind, field)
+            return
         _refresh_visibility()
         _run_live_escalation()
 
     def _simulate_pulse_and_check() -> None:
         result = _simulate_pulse(fields)
-        if result is not None and simulator_update_callback is not None:
+        if result is None:
+            return
+        if _run_live_escalation():
+            return
+        if simulator_update_callback is not None:
             simulator_update_callback("pulse", result)
-        _run_live_escalation()
 
     def _simulate_blood_pressure_and_check() -> None:
         result = _simulate_blood_pressure(fields)
-        if result is not None and simulator_update_callback is not None:
+        if result is None:
+            return
+        if _run_live_escalation():
+            return
+        if simulator_update_callback is not None:
             simulator_update_callback("blood_pressure", result)
-        _run_live_escalation()
 
     def _simulate_weight_and_check() -> None:
         result = _simulate_weight_in_form(fields, controller)
-        if result is not None and simulator_update_callback is not None:
+        if result is None:
+            return
+        if _run_live_escalation():
+            return
+        if simulator_update_callback is not None:
             simulator_update_callback("weight", result)
-        _run_live_escalation()
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
@@ -2787,30 +2822,26 @@ def _build_question_form(
                 _set_field_source(fields[key], fields[key].measurement_source)
                 sys_slider.on(
                     "change",
-                    lambda _, field=fields[key]: (
-                        _mark_manual_vital("blood_pressure", field),
-                        _run_live_escalation(),
+                    lambda _, field=fields[key]: _handle_manual_vital_change(
+                        "blood_pressure", field
                     ),
                 )
                 dia_slider.on(
                     "change",
-                    lambda _, field=fields[key]: (
-                        _mark_manual_vital("blood_pressure", field),
-                        _run_live_escalation(),
+                    lambda _, field=fields[key]: _handle_manual_vital_change(
+                        "blood_pressure", field
                     ),
                 )
                 sys_input.on(
                     "blur",
-                    lambda _, field=fields[key]: (
-                        _mark_manual_vital("blood_pressure", field),
-                        _run_live_escalation(),
+                    lambda _, field=fields[key]: _handle_manual_vital_change(
+                        "blood_pressure", field
                     ),
                 )
                 dia_input.on(
                     "blur",
-                    lambda _, field=fields[key]: (
-                        _mark_manual_vital("blood_pressure", field),
-                        _run_live_escalation(),
+                    lambda _, field=fields[key]: _handle_manual_vital_change(
+                        "blood_pressure", field
                     ),
                 )
                 ui.button(
@@ -2938,23 +2969,19 @@ def _build_question_form(
                             _set_field_source(fields[key], fields[key].measurement_source)
                             slider.on(
                                 "change",
-                                lambda _, field=fields[key], answer_key=key: (
-                                    _mark_manual_vital(
+                                lambda _, field=fields[key], answer_key=key:
+                                    _handle_manual_vital_change(
                                         "pulse" if answer_key == "puls" else "weight",
                                         field,
                                     ),
-                                    _run_live_escalation(),
-                                ),
                             )
                             number_input.on(
                                 "blur",
-                                lambda _, field=fields[key], answer_key=key: (
-                                    _mark_manual_vital(
+                                lambda _, field=fields[key], answer_key=key:
+                                    _handle_manual_vital_change(
                                         "pulse" if answer_key == "puls" else "weight",
                                         field,
                                     ),
-                                    _run_live_escalation(),
-                                ),
                             )
                             if key == "puls":
                                 ui.button(
@@ -3590,6 +3617,7 @@ def _check_live_form_escalation(
                 dialog.close()
                 if not ctrl.check_partial_answers_for_escalation(answers, vitals):
                     return
+                session.pending_input = None
                 if session.controllers and ctrl in session.controllers:
                     session.controllers.remove(ctrl)
                     session.controllers.insert(0, ctrl)
@@ -3987,6 +4015,12 @@ def _render_answer_editor(
         cancel_callback=lambda: _cancel_editing(session, refresh_ui),
         live_visibility=True,
         prefilled=_device_prefilled_answers(session),
+        live_escalation_callback=lambda answers: _check_live_form_escalation(
+            session,
+            session.controllers or ([ctrl] if ctrl else []),
+            answers,
+            refresh_ui,
+        ),
         simulator_update_callback=lambda kind, values: (
             _update_simulator_state_from_form(session, kind, values),
             refresh_ui(),
