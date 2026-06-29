@@ -16,7 +16,7 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 from app.ai.symptom_extractor import extract_answers
-from app.ai.assistant_chat import answer_question
+from app.ai.assistant_chat import answer_question, OFFLINE_REPLY
 from app.dialogue.consent_flow import (
     CONSENT_ACCEPTED,
     CONSENT_DECLINED,
@@ -4234,10 +4234,23 @@ def _render_assistant_chat(
             finally:
                 loading_dialog.close()
 
+            offline = reply == OFFLINE_REPLY
             session.assistant_messages.append(
-                ChatEntry(role="system", text=reply, tone="system")
+                ChatEntry(
+                    role="system",
+                    text=reply,
+                    tone="warning" if offline else "system",
+                )
             )
-            if session.speech_enabled and reply:
+            if offline:
+                ui.notify(
+                    "Der KI-Assistent ist zurzeit nicht erreichbar. "
+                    "Bitte versuchen Sie es später erneut.",
+                    color="negative",
+                    position="top",
+                    multi_line=True,
+                )
+            elif session.speech_enabled and reply:
                 _speak_text(reply)
             refresh_ui()
 

@@ -19,6 +19,18 @@ _DEFAULT_BASE_URL = "http://141.19.87.240:8000/v1"
 _DEFAULT_API_KEY = "local-dev-key"
 _DEFAULT_MODEL = "deepseek-v4-pro"
 
+# Zeitlimit (Sekunden) pro LLM-Aufruf. Ist der Server nicht erreichbar oder
+# antwortet er nicht, schlaegt der Aufruf nach dieser Zeit fehl, statt die
+# Oberflaeche blockieren zu lassen. Per .env ueberschreibbar: LLM_TIMEOUT.
+_DEFAULT_TIMEOUT_SECONDS = 15.0
+
+
+def _request_timeout_seconds() -> float:
+    try:
+        return float(os.environ.get("LLM_TIMEOUT", _DEFAULT_TIMEOUT_SECONDS))
+    except (TypeError, ValueError):
+        return _DEFAULT_TIMEOUT_SECONDS
+
 
 def _load_env() -> None:
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -48,7 +60,7 @@ def extract_answers(
     model = os.environ.get("LLM_MODEL", _DEFAULT_MODEL)
 
     try:
-        from openai import OpenAI
+        from openai import APIConnectionError, APITimeoutError, OpenAI
     except ImportError:
         log_info(
             "openai-Bibliothek nicht installiert (pip install openai), "
@@ -56,7 +68,12 @@ def extract_answers(
         )
         return {}
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client = OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        timeout=_request_timeout_seconds(),
+        max_retries=0,
+    )
 
     questions_desc = [
         {
@@ -157,6 +174,13 @@ def extract_answers(
 
         return result
 
+    except (APIConnectionError, APITimeoutError) as exc:
+        log_info(
+            "KI-Server nicht erreichbar oder Zeitlimit überschritten "
+            f"({type(exc).__name__}). Überspringe KI-Antwort-Extraktion, "
+            "der Fragebogen wird ohne Vorbefüllung fortgesetzt."
+        )
+        return {}
     except json.JSONDecodeError as exc:
         log_info(f"KI-Antwort war kein gültiges JSON: {exc} – Rohtext: {raw!r}")
         return {}

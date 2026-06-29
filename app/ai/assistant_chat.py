@@ -17,13 +17,27 @@ _DEFAULT_BASE_URL = "http://141.19.87.240:8000/v1"
 _DEFAULT_API_KEY = "local-dev-key"
 _DEFAULT_MODEL = "deepseek-v4-pro"
 
+# Zeitlimit (Sekunden) pro LLM-Aufruf. Ist der Server nicht erreichbar oder
+# antwortet er nicht, schlaegt der Aufruf nach dieser Zeit fehl, statt den
+# Chat blockieren zu lassen. Per .env ueberschreibbar: LLM_TIMEOUT.
+_DEFAULT_TIMEOUT_SECONDS = 15.0
+
 # Freundliche Ausweich-Antwort, falls die KI-Schnittstelle nicht erreichbar ist.
-_FALLBACK_REPLY = (
+# Oeffentlich, damit die Oberflaeche diesen Zustand erkennen und einen
+# entsprechenden Hinweis anzeigen kann.
+OFFLINE_REPLY = (
     "Entschuldigung, ich kann Ihre Frage gerade nicht beantworten, "
     "da die Verbindung zum Assistenzsystem nicht verfügbar ist. "
     "Bitte füllen Sie den Fragebogen nach bestem Wissen aus – das "
     "Praxisteam hilft Ihnen anschließend gerne weiter."
 )
+
+
+def _request_timeout_seconds() -> float:
+    try:
+        return float(os.environ.get("LLM_TIMEOUT", _DEFAULT_TIMEOUT_SECONDS))
+    except (TypeError, ValueError):
+        return _DEFAULT_TIMEOUT_SECONDS
 
 
 def _load_env() -> None:
@@ -82,9 +96,14 @@ def answer_question(
             "openai-Bibliothek nicht installiert (pip install openai), "
             "Hilfe-Chat nicht verfügbar."
         )
-        return _FALLBACK_REPLY
+        return OFFLINE_REPLY
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client = OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        timeout=_request_timeout_seconds(),
+        max_retries=0,
+    )
 
     context_block = _build_context_block(questions, answers)
 
@@ -129,7 +148,7 @@ def answer_question(
                 "Hilfe-Chat: KI-Antwort enthielt keinen Text. "
                 f"Vollständige Antwort: {response!r}"
             )
-            return _FALLBACK_REPLY
+            return OFFLINE_REPLY
 
         return reply.strip()
 
@@ -140,4 +159,4 @@ def answer_question(
             "Fehler im Hilfe-Chat: "
             f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
         )
-        return _FALLBACK_REPLY
+        return OFFLINE_REPLY
