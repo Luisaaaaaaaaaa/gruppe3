@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
 from app.output.summary_builder import AnamnesisSummary
+from app.output.scenario_display import get_scenario_title
 from app.patient_import.patient_schema import PatientRecord
 
 SEVERITY_TEXT_COLORS = {
@@ -52,7 +53,11 @@ def build_preview_html(
             _html_section_raw("Offene Punkte", f"<ul>{items}</ul>")
         )
 
-    scenario_text = f"{summary.scenario} &mdash; " if summary.scenario else ""
+    scenario_text = (
+        f"{escape(get_scenario_title(summary.scenario))} &mdash; "
+        if summary.scenario
+        else ""
+    )
     timestamp = summary.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M")
 
     return (
@@ -210,7 +215,7 @@ def export_summary_pdf(
     elements: list = []
     elements.append(Paragraph("Anamnese-Zusammenfassung", title_style))
 
-    scenario_text = summary.scenario or ""
+    scenario_text = get_scenario_title(summary.scenario) if summary.scenario else ""
     timestamp = summary.timestamp or datetime.now().strftime("%Y-%m-%d %H:%M")
     elements.append(
         Paragraph(f"Szenario: {scenario_text}<br/>Erstellt: {timestamp}", small_style)

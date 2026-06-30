@@ -99,6 +99,21 @@ def test_preview_documents_source_for_each_vital() -> None:
     assert "78 (Quelle: manuell eingegeben)" in html
 
 
+def test_preview_uses_german_scenario_title_for_internal_key() -> None:
+    patient = PatientRecord(patient_id="P-1", first_name="Test", last_name="Person")
+    summary = AnamnesisSummary(
+        patient_id="P-1",
+        patient_name="Test Person",
+        scenario="hypertension",
+        timestamp="2026-06-20T12:00:00",
+    )
+
+    html = build_preview_html(summary, patient)
+
+    assert "Szenario C - Hypertonie-Kontrolle" in html
+    assert "hypertension" not in html
+
+
 def test_export_summary_pdf_handles_very_long_table_values() -> None:
     patient = PatientRecord(
         patient_id="P-LANG",

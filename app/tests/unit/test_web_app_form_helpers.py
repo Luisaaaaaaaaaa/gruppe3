@@ -7,6 +7,7 @@ from app.ui.web_app import (
     _clear_simulator_state_for_manual_input,
     _device_prefilled_answers,
     _device_prefilled_sources,
+    _split_multiline_field,
     _set_unknown_state,
     _simulate_oximeter_in_form,
     _simulate_weight_in_form,
@@ -32,6 +33,14 @@ def test_unknown_state_can_be_reversed_for_manual_input() -> None:
     _set_unknown_state(False, control)
 
     assert control.enabled is True
+
+
+def test_split_multiline_field_keeps_empty_edit_as_empty_tuple() -> None:
+    assert _split_multiline_field("") == ()
+    assert _split_multiline_field("  Hypertonie  \n\nDiabetes ") == (
+        "Hypertonie",
+        "Diabetes",
+    )
 
 
 def test_unknown_state_updates_all_blood_pressure_controls() -> None:

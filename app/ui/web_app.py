@@ -30,6 +30,7 @@ from app.identity.name_normalization import normalize_person_name, person_name_k
 from app.patient_import.patient_list_client import PatientListClient
 from app.patient_import.patient_schema import PatientDetails, PatientRecord
 from app.output.export_pdf import export_summary_pdf
+from app.output.scenario_display import get_scenario_title
 
 MAX_ATTEMPTS = 3
 PAGE_TITLE = "KI-gestützter Anamnese-Agent"
@@ -1541,6 +1542,9 @@ def _get_recommended_scenario_ui_key(patient: PatientRecord | None) -> str | Non
 
 
 def _get_scenario_title(ui_key: str) -> str:
+    scenario_title = get_scenario_title(ui_key)
+    if scenario_title != str(ui_key or "").strip():
+        return scenario_title
     for s in SCENARIOS:
         if s["key"] == ui_key:
             return f"Szenario {ui_key} – {s['title']}"
@@ -1755,6 +1759,19 @@ def _generate_patient_id() -> str:
     return f"MAN-{next_num:04d}"
 
 
+def _split_multiline_field(value: str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    return tuple(line.strip() for line in str(value).splitlines() if line.strip())
+
+
+def _form_text_value(field: object, fallback: str = "") -> str:
+    value = getattr(field, "value", None)
+    if value is None:
+        return fallback
+    return str(value)
+
+
 def _open_new_patient_dialog(
     session: BrowserSession,
     refresh_ui: Callable[[], None],
@@ -1920,27 +1937,23 @@ def _open_new_patient_dialog(
                     return
 
                 def _lines(field) -> tuple[str, ...]:
-                    if field is None:
-                        return ()
-                    return tuple(
-                        line.strip() for line in field.value.split("\n") if line.strip()
-                    )
+                    return _split_multiline_field(getattr(field, "value", None))
 
                 details = PatientDetails(
-                    phone=telefon.value or orig_details.phone,
-                    notes=notizen.value or orig_details.notes,
-                    gender=geschlecht.value if geschlecht is not None else orig_details.gender,
-                    language=sprache.value if sprache is not None else orig_details.language,
-                    contact_city=wohnort.value if wohnort is not None else orig_details.contact_city,
-                    insurance=versicherung.value if versicherung is not None else orig_details.insurance,
+                    phone=_form_text_value(telefon, orig_details.phone),
+                    notes=_form_text_value(notizen, orig_details.notes),
+                    gender=_form_text_value(geschlecht, orig_details.gender),
+                    language=_form_text_value(sprache, orig_details.language),
+                    contact_city=_form_text_value(wohnort, orig_details.contact_city),
+                    insurance=_form_text_value(versicherung, orig_details.insurance),
                     groesse_cm=int(groesse.value) if groesse is not None and groesse.value.strip() else orig_details.groesse_cm,
-                    next_appointment_at=termindatum.value if termindatum is not None else orig_details.next_appointment_at,
-                    next_appointment_type=terminart.value if terminart is not None else orig_details.next_appointment_type,
-                    next_appointment_note=terminnotiz.value if terminnotiz is not None else orig_details.next_appointment_note,
-                    allergies=_lines(allergien) or orig_details.allergies,
-                    long_term_diagnoses=_lines(dauerdiagnosen) or orig_details.long_term_diagnoses,
+                    next_appointment_at=_form_text_value(termindatum, orig_details.next_appointment_at),
+                    next_appointment_type=_form_text_value(terminart, orig_details.next_appointment_type),
+                    next_appointment_note=_form_text_value(terminnotiz, orig_details.next_appointment_note),
+                    allergies=_lines(allergien),
+                    long_term_diagnoses=_lines(dauerdiagnosen),
                     acute_diagnoses=orig_details.acute_diagnoses,
-                    risk_factors=_lines(risikofaktoren) or orig_details.risk_factors,
+                    risk_factors=_lines(risikofaktoren),
                     medication_details=orig_details.medication_details,
                     patient_notes=orig_details.patient_notes,
                     open_tasks=orig_details.open_tasks,
