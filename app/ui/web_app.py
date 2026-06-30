@@ -3617,9 +3617,15 @@ def _render_symptom_chat(
             finally:
                 loading_dialog.close()
 
-            session.prefilled_answers = prefilled
-            session.ai_prefilled_keys = set(prefilled)
-            session.chat_phase_done = True
+            controllers = session.controllers or ([ctrl] if ctrl is not None else [])
+            if _apply_symptom_chat_prefill(
+                session,
+                prefilled,
+                controllers,
+                refresh_ui,
+            ):
+                return
+
             if prefilled:
                 ui.notify(
                     f"KI hat {len(prefilled)} Frage(n) vorausgefüllt.",
@@ -3663,12 +3669,81 @@ def _render_mass_anamnesis(
         _render_mass_anamnesis_single(session, refresh_ui)
 
 
+def _apply_symptom_chat_prefill(
+    session: BrowserSession,
+    prefilled: dict[str, str],
+    controllers: list[DialogueController],
+    refresh_ui: Callable[[], None],
+) -> bool:
+    """Speichert KI-/Spracheingaben und prueft sofort auf kritische Red Flags."""
+    session.prefilled_answers = dict(prefilled)
+    session.ai_prefilled_keys = set(prefilled)
+    session.chat_phase_done = True
+
+    if not prefilled:
+        return False
+
+    return _check_live_form_escalation(
+        session,
+        controllers,
+        prefilled,
+        refresh_ui,
+        refresh_on_correct=True,
+    )
+
+
+def _answer_keys_from_red_flags(
+    red_flags: list[object],
+    answers: dict[str, str],
+) -> set[str]:
+    trigger_text = " ".join(
+        str(getattr(flag, "triggered_by", "")) for flag in red_flags
+    ).lower()
+    aliases_by_key = {
+        "blutdruck_systolisch": ("systolisch",),
+        "blutdruck_diastolisch": ("diastolisch",),
+        "korpertemperatur": ("temperatur", "koerpertemperatur", "körpertemperatur"),
+    }
+
+    keys: set[str] = set()
+    for key in answers:
+        aliases = (key, *aliases_by_key.get(key, ()))
+        if any(alias.lower() in trigger_text for alias in aliases):
+            keys.add(key)
+
+    if "blutdruck_systolisch" in keys or "blutdruck_diastolisch" in keys:
+        keys.update(
+            key
+            for key in ("blutdruck_systolisch", "blutdruck_diastolisch")
+            if key in answers
+        )
+
+    return keys
+
+
+def _clear_prefilled_red_flag_values_for_correction(
+    session: BrowserSession,
+    answers: dict[str, str],
+    red_flags: list[object],
+) -> set[str]:
+    keys = _answer_keys_from_red_flags(red_flags, answers)
+    if not keys and len(answers) == 1:
+        keys = set(answers)
+
+    for key in keys:
+        session.prefilled_answers.pop(key, None)
+        session.ai_prefilled_keys.discard(key)
+
+    return keys
+
+
 def _check_live_form_escalation(
     session: BrowserSession,
     controllers: list[DialogueController],
     answers: dict[str, str],
     refresh_ui: Callable[[], None],
     vitals: dict[str, int | float] | None = None,
+    refresh_on_correct: bool = False,
 ) -> bool:
     """Fordert vor einer Eskalation die Bestätigung der kritischen Angabe an."""
     if session.critical_confirmation_open:
@@ -3725,6 +3800,13 @@ def _check_live_form_escalation(
             def _correct_value() -> None:
                 session.critical_confirmation_open = False
                 dialog.close()
+                if refresh_on_correct:
+                    _clear_prefilled_red_flag_values_for_correction(
+                        session,
+                        answers,
+                        critical_flags,
+                    )
+                    refresh_ui()
 
             with ui.row().classes("w-full justify-end gap-3 mt-4"):
                 ui.button("Wert korrigieren", on_click=_correct_value).props("outline")

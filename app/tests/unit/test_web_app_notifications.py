@@ -6,6 +6,8 @@ import pytest
 from app.patient_import.patient_schema import PatientRecord
 from app.ui.web_app import (
     _answer_yes_no,
+    _apply_symptom_chat_prefill,
+    _clear_prefilled_red_flag_values_for_correction,
     _complete_successful_login,
     _dismiss_critical_warning,
     _find_duplicate_patient,
@@ -208,6 +210,105 @@ def test_guided_yes_no_critical_opens_confirmation_before_callback(monkeypatch) 
     assert refresh_calls == []
     assert session.pending_input is callback
     assert session.messages == []
+
+
+def test_symptom_chat_prefill_runs_live_escalation(monkeypatch) -> None:
+    calls: list[dict] = []
+    controller = SimpleNamespace()
+    session = SimpleNamespace(
+        prefilled_answers={},
+        ai_prefilled_keys=set(),
+        chat_phase_done=False,
+        critical_confirmation_open=False,
+    )
+    prefilled = {"akut_verwirrt_bewusstlos": "ja"}
+
+    def fake_live_check(
+        session_arg,
+        controllers,
+        answers,
+        refresh_ui,
+        vitals=None,
+        refresh_on_correct=False,
+    ):
+        calls.append(
+            {
+                "session": session_arg,
+                "controllers": controllers,
+                "answers": answers,
+                "vitals": vitals,
+                "refresh_on_correct": refresh_on_correct,
+            }
+        )
+        return True
+
+    monkeypatch.setattr("app.ui.web_app._check_live_form_escalation", fake_live_check)
+
+    blocked = _apply_symptom_chat_prefill(
+        session,
+        prefilled,
+        [controller],
+        lambda: None,
+    )
+
+    assert blocked is True
+    assert session.prefilled_answers == prefilled
+    assert session.ai_prefilled_keys == set(prefilled)
+    assert session.chat_phase_done is True
+    assert calls == [
+        {
+            "session": session,
+            "controllers": [controller],
+            "answers": prefilled,
+            "vitals": None,
+            "refresh_on_correct": True,
+        }
+    ]
+
+
+def test_correcting_prefilled_red_flag_clears_triggering_answer_only() -> None:
+    session = SimpleNamespace(
+        prefilled_answers={
+            "akut_verwirrt_bewusstlos": "ja",
+            "sehstoerungen": "nein",
+        },
+        ai_prefilled_keys={"akut_verwirrt_bewusstlos", "sehstoerungen"},
+    )
+
+    cleared = _clear_prefilled_red_flag_values_for_correction(
+        session,
+        session.prefilled_answers.copy(),
+        [SimpleNamespace(triggered_by="akut_verwirrt_bewusstlos=ja")],
+    )
+
+    assert cleared == {"akut_verwirrt_bewusstlos"}
+    assert session.prefilled_answers == {"sehstoerungen": "nein"}
+    assert session.ai_prefilled_keys == {"sehstoerungen"}
+
+
+def test_correcting_prefilled_red_flag_clears_blood_pressure_pair() -> None:
+    session = SimpleNamespace(
+        prefilled_answers={
+            "blutdruck_systolisch": "190",
+            "blutdruck_diastolisch": "90",
+            "kopfschmerz": "nein",
+        },
+        ai_prefilled_keys={
+            "blutdruck_systolisch",
+            "blutdruck_diastolisch",
+            "kopfschmerz",
+        },
+    )
+
+    cleared = _clear_prefilled_red_flag_values_for_correction(
+        session,
+        session.prefilled_answers.copy(),
+        [SimpleNamespace(triggered_by="systolisch=190")],
+    )
+
+    assert cleared == {"blutdruck_systolisch", "blutdruck_diastolisch"}
+    assert session.prefilled_answers == {"kopfschmerz": "nein"}
+    assert session.ai_prefilled_keys == {"kopfschmerz"}
 
 
 def test_guided_yes_no_noncritical_continues_normally(monkeypatch) -> None:
