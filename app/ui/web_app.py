@@ -664,11 +664,14 @@ class _SliderField:
     max_val: float
     step: float
     info_label: ui.label | None = None
+    value_recorded: bool = False
 
     @property
     def value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
+        if not self.value_recorded:
+            return ""
         value = self.number_input.value
         if value in (None, ""):
             return ""
@@ -690,11 +693,14 @@ class _BloodPressureField:
     dia_slider: ui.slider
     dia_input: ui.number
     unknown_checkbox: ui.checkbox
+    value_recorded: bool = False
 
     @property
     def value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
+        if not self.value_recorded:
+            return ""
         if self.sys_input.value in (None, "") or self.dia_input.value in (None, ""):
             return ""
         return f"{int(float(self.sys_input.value))}/{int(float(self.dia_input.value))}"
@@ -703,6 +709,8 @@ class _BloodPressureField:
     def sys_value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
+        if not self.value_recorded:
+            return ""
         if self.sys_input.value in (None, ""):
             return ""
         return str(int(float(self.sys_input.value)))
@@ -711,6 +719,8 @@ class _BloodPressureField:
     def dia_value(self) -> str:
         if self.unknown_checkbox.value:
             return "unbekannt"
+        if not self.value_recorded:
+            return ""
         if self.dia_input.value in (None, ""):
             return ""
         return str(int(float(self.dia_input.value)))
@@ -2686,6 +2696,8 @@ def _set_field_source(field: object, source: str) -> None:
     label = getattr(field, "source_label", None)
     if label is not None:
         display_source = {
+            "noch nicht erfasst": "noch nicht erfasst",
+            "unbekannt": "unbekannt / nicht gemessen",
             "manuell eingegeben": "manuelle Eingabe",
             "simuliert": "Simulator",
             "per Sprache erfasst": "Spracheingabe",
@@ -2703,12 +2715,18 @@ def _set_unknown_state(is_unknown: bool | None, *controls: object) -> None:
             control.enable()
 
 
+def _mark_field_recorded(field: object | None, recorded: bool) -> None:
+    if field is not None and hasattr(field, "value_recorded"):
+        setattr(field, "value_recorded", recorded)
+
+
 def _simulate_pulse(fields: dict[str, object]) -> dict[str, int] | None:
     puls_field = fields.get("puls")
     if not isinstance(puls_field, _SliderField):
         return None
     simulated = Simulator.simuliere_puls()
     _set_field_source(puls_field, "simuliert")
+    _mark_field_recorded(puls_field, True)
     puls_field.slider.enable()
     puls_field.number_input.enable()
     puls_field.unknown_checkbox.set_value(False)
@@ -2731,6 +2749,7 @@ def _simulate_oximeter_in_form(
     )
     result = sim.pulsoximeter()
     _set_field_source(spo2_field, "simuliert")
+    _mark_field_recorded(spo2_field, True)
     spo2_field.slider.enable()
     spo2_field.number_input.enable()
     spo2_field.unknown_checkbox.set_value(False)
@@ -2740,6 +2759,7 @@ def _simulate_oximeter_in_form(
     puls_field = fields.get("puls")
     if isinstance(puls_field, _SliderField):
         _set_field_source(puls_field, "simuliert")
+        _mark_field_recorded(puls_field, True)
         puls_field.slider.enable()
         puls_field.number_input.enable()
         puls_field.unknown_checkbox.set_value(False)
@@ -2755,6 +2775,7 @@ def _simulate_blood_pressure(fields: dict[str, object]) -> dict[str, int] | None
         return None
     bp = Simulator.simuliere_blutdruck()
     _set_field_source(bp_field, "simuliert")
+    _mark_field_recorded(bp_field, True)
     bp_field.unknown_checkbox.set_value(False)
     bp_field.sys_slider.set_value(bp["systolisch"])
     bp_field.sys_input.set_value(bp["systolisch"])
@@ -2786,6 +2807,7 @@ def _simulate_weight_in_form(
     bmi = result["bmi"]
     klasse = result["klasse"]
     _set_field_source(weight_field, "simuliert")
+    _mark_field_recorded(weight_field, True)
     weight_field.slider.enable()
     weight_field.number_input.enable()
     weight_field.unknown_checkbox.set_value(False)
@@ -2859,7 +2881,10 @@ def _build_question_form(
                 )
 
         bp_field = fields.get("blutdruck_systolisch")
-        if isinstance(bp_field, _BloodPressureField) and not bp_field.unknown_checkbox.value:
+        if (
+            isinstance(bp_field, _BloodPressureField)
+            and bp_field.value not in ("", "unbekannt", "nicht gemessen")
+        ):
             source = getattr(bp_field, "measurement_source", "manuell eingegeben")
             sources["systolisch"] = source
             sources["diastolisch"] = source
@@ -2887,6 +2912,7 @@ def _build_question_form(
 
     def _handle_manual_vital_change(kind: str, field: object | None = None) -> None:
         if field is not None:
+            _mark_field_recorded(field, True)
             _set_field_source(field, "manuell eingegeben")
         if _run_live_escalation():
             return
@@ -2905,9 +2931,21 @@ def _build_question_form(
             not is_unknown
             and getattr(field, "measurement_source", "") == "simuliert"
         )
-        if not simulator_just_supplied_value:
-            _handle_manual_vital_change(kind, field)
+        if is_unknown:
+            _mark_field_recorded(field, True)
+            _set_field_source(field, "unbekannt")
+            if _run_live_escalation():
+                return
+            if manual_vital_callback is not None:
+                manual_vital_callback(kind, _collect_values())
             return
+        if simulator_just_supplied_value:
+            _mark_field_recorded(field, True)
+            _refresh_visibility()
+            _run_live_escalation()
+            return
+        _mark_field_recorded(field, False)
+        _set_field_source(field, "noch nicht erfasst")
         _refresh_visibility()
         _run_live_escalation()
 
@@ -3005,12 +3043,11 @@ def _build_question_form(
                         answer_by_key.get("blutdruck_diastolisch", ""),
                     )
                 ).strip()
-                is_unknown = (
-                    not sys_answer
-                    or not dia_answer
-                    or sys_answer.lower() == "unbekannt"
+                explicit_unknown = (
+                    sys_answer.lower() == "unbekannt"
                     or dia_answer.lower() == "unbekannt"
                 )
+                has_recorded_bp = bool(sys_answer and dia_answer and not explicit_unknown)
                 try:
                     initial_sys = int(float(sys_answer.replace(",", ".")))
                 except ValueError:
@@ -3066,10 +3103,10 @@ def _build_question_form(
                                 if e.args not in (None, "") else None,
                             )
                         unknown_checkbox = ui.checkbox(
-                            "unbekannt", value=is_unknown
+                            "unbekannt", value=explicit_unknown
                         )
                         _set_unknown_state(
-                            is_unknown, sys_slider, sys_input, dia_slider, dia_input
+                            explicit_unknown, sys_slider, sys_input, dia_slider, dia_input
                         )
                         unknown_checkbox.on_value_change(
                             lambda e: _handle_unknown_vital_change(
@@ -3083,14 +3120,24 @@ def _build_question_form(
                             )
                         )
                 fields[key] = _BloodPressureField(
-                    sys_slider, sys_input, dia_slider, dia_input, unknown_checkbox
+                    sys_slider,
+                    sys_input,
+                    dia_slider,
+                    dia_input,
+                    unknown_checkbox,
+                    has_recorded_bp or explicit_unknown,
                 )
                 source_label = ui.label(
                     "Ausgewählt: manuelle Eingabe"
                 ).classes("text-sm font-medium text-[#0f766e]")
                 fields[key].source_label = source_label
-                fields[key].measurement_source = prefilled_vital_sources.get(
-                    "systolisch", "manuell eingegeben"
+                fields[key].measurement_source = (
+                    "unbekannt"
+                    if explicit_unknown
+                    else prefilled_vital_sources.get(
+                        "systolisch",
+                        "manuell eingegeben" if has_recorded_bp else "noch nicht erfasst",
+                    )
                 )
                 _set_field_source(fields[key], fields[key].measurement_source)
                 sys_slider.on(
@@ -3157,18 +3204,18 @@ def _build_question_form(
                         min_val = float(question.slider_min)
                         max_val = float(question.slider_max)
                         step = float(question.slider_step or 1)
+                        answer_text = str(effective_answer).strip()
+                        explicit_unknown = answer_text.lower() == "unbekannt"
 
                         try:
-                            init_val = float(effective_answer.replace(",", "."))
+                            init_val = float(answer_text.replace(",", "."))
+                            has_recorded_value = True
                         except (ValueError, AttributeError):
                             init_val = min_val
+                            has_recorded_value = False
 
                         init_val = max(min_val, min(max_val, init_val))
                         vital_slider_keys = {"puls", "spo2", "gewicht", "gewicht_aktuell"}
-                        is_unknown = (
-                            key in vital_slider_keys
-                            and not str(effective_answer).strip()
-                        )
 
                         with ui.column().classes("w-full gap-1"):
                             slider = ui.slider(
@@ -3195,14 +3242,10 @@ def _build_question_form(
                                 if e.args not in (None, "") else None,
                             )
 
-                            is_unknown = (
-                                is_unknown
-                                or str(effective_answer).strip().lower() == "unbekannt"
-                            )
                             unknown_checkbox = ui.checkbox(
-                                "unbekannt", value=is_unknown
+                                "unbekannt", value=explicit_unknown
                             )
-                            _set_unknown_state(is_unknown, slider, number_input)
+                            _set_unknown_state(explicit_unknown, slider, number_input)
                             unknown_checkbox.on_value_change(
                                 lambda e, s=slider, inp=number_input, answer_key=key: (
                                     _handle_unknown_vital_change(
@@ -3222,7 +3265,25 @@ def _build_question_form(
                             )
 
                         fields[key] = _SliderField(
-                            slider, unknown_checkbox, number_input, min_val, max_val, step
+                            slider,
+                            unknown_checkbox,
+                            number_input,
+                            min_val,
+                            max_val,
+                            step,
+                            value_recorded=has_recorded_value or explicit_unknown,
+                        )
+                        slider.on(
+                            "change",
+                            lambda _, field=fields[key]: _mark_field_recorded(
+                                field, True
+                            ),
+                        )
+                        number_input.on(
+                            "blur",
+                            lambda _, field=fields[key]: _mark_field_recorded(
+                                field, True
+                            ),
                         )
                         if key in ("gewicht", "gewicht_aktuell"):
                             fields[key].info_label = ui.label("").classes(
@@ -3236,8 +3297,15 @@ def _build_question_form(
                             vital_source_key = (
                                 "gewicht" if key in ("gewicht", "gewicht_aktuell") else key
                             )
-                            fields[key].measurement_source = prefilled_vital_sources.get(
-                                vital_source_key, "manuell eingegeben"
+                            fields[key].measurement_source = (
+                                "unbekannt"
+                                if explicit_unknown
+                                else prefilled_vital_sources.get(
+                                    vital_source_key,
+                                    "manuell eingegeben"
+                                    if has_recorded_value
+                                    else "noch nicht erfasst",
+                                )
                             )
                             _set_field_source(fields[key], fields[key].measurement_source)
                             slider.on(
@@ -3321,10 +3389,90 @@ def _build_question_form(
 
             return errors
 
+        def _missing_vital_labels(collected: dict[str, str]) -> tuple[str, ...]:
+            labels_by_key = {
+                "blutdruck_systolisch": "Blutdruck",
+                "puls": "Puls",
+                "spo2": "Sauerstoffsaettigung",
+                "gewicht": "Gewicht",
+                "gewicht_aktuell": "Gewicht",
+            }
+            missing: list[str] = []
+            seen: set[str] = set()
+            for answer_key, label_text in labels_by_key.items():
+                if answer_key not in fields:
+                    continue
+                container = containers.get(answer_key)
+                if container is not None and not container.visible:
+                    continue
+                if label_text in seen:
+                    continue
+                value = str(collected.get(answer_key, "")).strip().lower()
+                if value in ("", "unbekannt", "nicht gemessen"):
+                    seen.add(label_text)
+                    missing.append(label_text)
+            return tuple(missing)
+
+        confirmed_missing_vitals: tuple[str, ...] | None = None
+        missing_vital_confirmation_open = False
+
+        def _finalize_submit(collected: dict[str, str]) -> None:
+            if _run_live_escalation():
+                return
+            submit_callback(collected, _collect_vital_sources())
+
+        def _open_missing_vitals_confirmation(
+            missing_labels: tuple[str, ...],
+            collected: dict[str, str],
+        ) -> None:
+            nonlocal confirmed_missing_vitals, missing_vital_confirmation_open
+            if missing_vital_confirmation_open:
+                return
+
+            missing_vital_confirmation_open = True
+            dialog = ui.dialog().props("persistent")
+            with dialog, ui.card().classes("w-[560px] max-w-full p-6"):
+                ui.label("Vitalwerte fehlen").classes(
+                    "text-xl font-semibold text-[#b55a07]"
+                )
+                ui.label(
+                    "Folgende wichtige Werte wurden nicht erfasst oder als unbekannt markiert. "
+                    "Bitte pruefen Sie, ob das so bleiben soll."
+                ).classes("text-[0.97rem] leading-7 text-slate-600")
+                for label_text in missing_labels:
+                    ui.label(f"- {label_text}").classes(
+                        "text-sm leading-6 text-slate-700"
+                    )
+
+                def _confirm_missing_vitals() -> None:
+                    nonlocal confirmed_missing_vitals, missing_vital_confirmation_open
+                    confirmed_missing_vitals = missing_labels
+                    missing_vital_confirmation_open = False
+                    dialog.close()
+                    _finalize_submit(collected)
+
+                def _correct_missing_vitals() -> None:
+                    nonlocal missing_vital_confirmation_open
+                    missing_vital_confirmation_open = False
+                    dialog.close()
+
+                with ui.row().classes("w-full justify-end gap-3 mt-4"):
+                    ui.button("Werte ergaenzen", on_click=_correct_missing_vitals).props(
+                        "outline"
+                    )
+                    ui.button(
+                        "Trotzdem fortfahren",
+                        on_click=_confirm_missing_vitals,
+                    ).props("unelevated").classes("bg-[#b55a07] text-white")
+
+            dialog.open()
+
         def _on_submit() -> None:
+            nonlocal confirmed_missing_vitals
             session.critical_confirmation_open = False
             errors = _collect_and_validate()
             if errors:
+                confirmed_missing_vitals = None
                 ui.notify(
                     "Bitte korrigieren Sie folgende Fehler:\n" + "\n".join(errors),
                     color="negative",
@@ -3332,9 +3480,11 @@ def _build_question_form(
                 )
                 return
             collected = _collect_values()
-            if _run_live_escalation():
+            missing_vitals = _missing_vital_labels(collected)
+            if missing_vitals and confirmed_missing_vitals != missing_vitals:
+                _open_missing_vitals_confirmation(missing_vitals, collected)
                 return
-            submit_callback(collected, _collect_vital_sources())
+            _finalize_submit(collected)
 
         with ui.row().classes("w-full justify-end gap-3"):
             ui.button(

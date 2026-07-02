@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from nicegui import ui
 
 from app.ui.web_app import (
+    _BloodPressureField,
     _SliderField,
     _clear_simulator_state_for_manual_input,
     _device_prefilled_answers,
@@ -54,6 +55,40 @@ def test_unknown_state_updates_all_blood_pressure_controls() -> None:
     _set_unknown_state(False, systolic, diastolic)
     assert systolic.enabled
     assert diastolic.enabled
+
+
+def test_slider_field_without_recorded_value_stays_empty() -> None:
+    slider = ui.slider(min=0, max=10, step=1, value=0)
+    checkbox = ui.checkbox("unbekannt", value=False)
+    number_input = ui.number("Messwert", value=0, min=0, max=10, step=1)
+    field = _SliderField(slider, checkbox, number_input, 0, 10, 1)
+
+    assert field.value == ""
+
+    field.value_recorded = True
+
+    assert field.value == "0"
+
+
+def test_blood_pressure_field_without_recorded_value_stays_empty() -> None:
+    sys_slider = ui.slider(min=80, max=250, step=1, value=120)
+    sys_input = ui.number("Oberer Wert", value=120, min=80, max=250, step=1)
+    dia_slider = ui.slider(min=40, max=150, step=1, value=80)
+    dia_input = ui.number("Unterer Wert", value=80, min=40, max=150, step=1)
+    checkbox = ui.checkbox("unbekannt", value=False)
+    field = _BloodPressureField(
+        sys_slider, sys_input, dia_slider, dia_input, checkbox
+    )
+
+    assert field.value == ""
+    assert field.sys_value == ""
+    assert field.dia_value == ""
+
+    checkbox.set_value(True)
+
+    assert field.value == "unbekannt"
+    assert field.sys_value == "unbekannt"
+    assert field.dia_value == "unbekannt"
 
 
 def test_weight_simulator_recovers_from_unknown_state(monkeypatch) -> None:
