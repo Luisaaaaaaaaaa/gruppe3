@@ -5,17 +5,20 @@ import pytest
 
 from app.patient_import.patient_schema import PatientRecord
 from app.ui.web_app import (
+    BrowserSession,
     _answer_yes_no,
     _apply_symptom_chat_prefill,
     _clear_prefilled_red_flag_values_for_correction,
     _complete_successful_login,
     _dismiss_critical_warning,
     _find_duplicate_patient,
+    _initialize_session_from_url,
     _parse_birth_date,
     _parse_optional_iso_birth_date,
     _parse_required_iso_birth_date,
     _reset_browser_session,
     _select_patient_for_personal_mode,
+    _sync_browser_url,
 )
 
 
@@ -34,6 +37,19 @@ def test_dismiss_critical_warning_closes_only_red_flag_notifications(monkeypatch
     assert len(scripts) == 1
     assert ".critical-red-flag-notification" in scripts[0]
     assert "button.click()" in scripts[0]
+
+
+def test_browser_back_guard_warns_user(monkeypatch) -> None:
+    scripts: list[str] = []
+    monkeypatch.setattr("app.ui.web_app.ui.run_javascript", scripts.append)
+    session = BrowserSession(stage="scenario")
+
+    _sync_browser_url(session)
+
+    assert len(scripts) == 1
+    assert "popstate" in scripts[0]
+    assert "Browser-Zurück-Taste ist hier deaktiviert" in scripts[0]
+    assert "window.Quasar.Notify.create" in scripts[0]
 
 
 def test_selecting_another_patient_dismisses_previous_warning(monkeypatch) -> None:
@@ -179,6 +195,34 @@ def test_successful_login_sets_patient_and_resets_state(monkeypatch) -> None:
     assert session.login_tone == "tone-info"
     assert session.login_blocked_until is None
     assert session.stage == "scenario"
+
+
+def test_dialogue_reload_returns_to_scenario_selection_with_notice(monkeypatch) -> None:
+    patient = PatientRecord(
+        patient_id="P-RELOAD",
+        first_name="Reload",
+        last_name="Test",
+        date_of_birth="1980-01-01",
+    )
+    monkeypatch.setattr("app.ui.web_app.PATIENTS", [patient])
+    monkeypatch.setattr(
+        "app.ui.web_app._request_url_state",
+        lambda: {
+            "page": "dialogue",
+            "patient": "P-RELOAD",
+            "scenarios": "B,D",
+        },
+    )
+
+    session = BrowserSession()
+
+    _initialize_session_from_url(session)
+
+    assert session.current_patient is patient
+    assert session.selected_scenarios == ["B", "D"]
+    assert session.stage == "scenario"
+    assert session.controllers == []
+    assert session.reload_message == "Der laufende Dialog wurde neu gestartet."
 
 
 def test_guided_yes_no_critical_opens_confirmation_before_callback(monkeypatch) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -37,6 +38,21 @@ PAGE_TITLE = "KI-gestützter Anamnese-Agent"
 PERSONAL_PAGE_TITLE = "SET Personalmodus"
 PATIENT_MODE = "patient"
 PERSONAL_MODE = "personal"
+URL_PAGE_PARAM = "page"
+URL_PATIENT_PARAM = "patient"
+URL_SCENARIOS_PARAM = "scenarios"
+URL_PAGE_STAFF = "staff"
+URL_PAGE_LOGIN = "login"
+URL_PAGE_SCENARIO = "scenario"
+URL_PAGE_DIALOGUE = "dialogue"
+URL_PAGE_EDIT = "edit"
+URL_PAGES = {
+    URL_PAGE_STAFF,
+    URL_PAGE_LOGIN,
+    URL_PAGE_SCENARIO,
+    URL_PAGE_DIALOGUE,
+    URL_PAGE_EDIT,
+}
 STYLE_BLOCK = """
 <style>
     :root {
@@ -568,6 +584,7 @@ class BrowserSession:
     show_cancel_dialog: bool = False
     show_reject_consent_dialog: bool = False
     login_blocked_until: float | None = None
+    reload_message: str = ""
     avatar_messages: list[ChatEntry] = field(default_factory=list)
     chat_input_text: str = ""
     assistant_messages: list[ChatEntry] = field(default_factory=list)
@@ -602,6 +619,7 @@ class BrowserSession:
         self.show_cancel_dialog = False
         self.show_reject_consent_dialog = False
         self.login_blocked_until = None
+        self.reload_message = ""
         self.avatar_messages.clear()
         self.chat_input_text = ""
         self.assistant_messages.clear()
@@ -766,6 +784,198 @@ def _get_process_steps(session: BrowserSession) -> list[tuple[str, str]]:
             chips.append((label, "todo"))
 
     return chips
+
+
+def _normalize_url_page(value: object) -> str | None:
+    page = str(value or "").strip().lower()
+    return page if page in URL_PAGES else None
+
+
+def _scenario_keys_from_value(value: object) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item).strip().upper() for item in value]
+    else:
+        parts = [part.strip().upper() for part in str(value or "").split(",")]
+
+    allowed = {scenario["key"] for scenario in SCENARIOS}
+    result: list[str] = []
+    for key in parts:
+        if key in allowed and key not in result:
+            result.append(key)
+    return result
+
+
+def _find_patient_by_id(patient_id: object) -> PatientRecord | None:
+    normalized = str(patient_id or "").strip()
+    if not normalized:
+        return None
+    for patient in PATIENTS:
+        if patient.patient_id == normalized:
+            return patient
+    return None
+
+
+def _request_url_state() -> dict[str, str]:
+    try:
+        params = ui.context.client.request.query_params
+    except RuntimeError:
+        return {}
+    return {
+        "page": params.get(URL_PAGE_PARAM, ""),
+        "patient": params.get(URL_PATIENT_PARAM, ""),
+        "scenarios": params.get(URL_SCENARIOS_PARAM, ""),
+    }
+
+
+def _session_url_page(session: BrowserSession) -> str:
+    if session.editing_answers:
+        return URL_PAGE_EDIT
+    if session.stage == "staff_selection":
+        return URL_PAGE_STAFF
+    if session.stage == "login":
+        return URL_PAGE_LOGIN
+    if session.stage == "scenario":
+        return URL_PAGE_SCENARIO
+    return URL_PAGE_DIALOGUE
+
+
+def _url_payload_for_session(session: BrowserSession) -> dict[str, object]:
+    return {
+        "page": _session_url_page(session),
+        "patient": (
+            session.current_patient.patient_id
+            if session.current_patient is not None
+            else ""
+        ),
+        "scenarios": list(session.selected_scenarios),
+    }
+
+
+def _sync_browser_url(session: BrowserSession) -> None:
+    payload = _url_payload_for_session(session)
+    ui.run_javascript(
+        f"""
+        (() => {{
+            const payload = {json.dumps(payload)};
+            const url = new URL(window.location.href);
+            url.searchParams.set({json.dumps(URL_PAGE_PARAM)}, payload.page);
+            if (payload.patient) {{
+                url.searchParams.set({json.dumps(URL_PATIENT_PARAM)}, payload.patient);
+            }} else {{
+                url.searchParams.delete({json.dumps(URL_PATIENT_PARAM)});
+            }}
+            if (payload.scenarios.length > 0) {{
+                url.searchParams.set({json.dumps(URL_SCENARIOS_PARAM)}, payload.scenarios.join(','));
+            }} else {{
+                url.searchParams.delete({json.dumps(URL_SCENARIOS_PARAM)});
+            }}
+
+            const state = {{...payload, appHistoryGuard: true}};
+            window.__setAnamnesisCurrentHistory = () => {{
+                window.__anamnesisCurrentHistory = {{state, href: url.href}};
+                window.history.replaceState(state, '', url);
+            }};
+            window.__setAnamnesisCurrentHistory();
+
+            if (!window.__anamnesisHistoryGuardInstalled) {{
+                window.__anamnesisHistoryGuardInstalled = true;
+                window.history.pushState(state, '', url);
+                window.addEventListener('popstate', () => {{
+                    const current = window.__anamnesisCurrentHistory;
+                    if (!current) {{
+                        return;
+                    }}
+                    window.history.pushState(current.state, '', current.href);
+                    const now = Date.now();
+                    if (now - (window.__anamnesisLastBackWarningAt || 0) < 1200) {{
+                        return;
+                    }}
+                    window.__anamnesisLastBackWarningAt = now;
+                    const message = 'Bitte nutzen Sie die Schaltflächen innerhalb der Anwendung. Die Zurück-Taste des Browsers ist hier deaktiviert.';
+                    if (window.Quasar?.Notify) {{
+                        window.Quasar.Notify.create({{
+                            message,
+                            color: 'warning',
+                            position: 'top',
+                            timeout: 3500,
+                            multiLine: true,
+                        }});
+                    }} else {{
+                        window.alert(message);
+                    }}
+                }});
+            }}
+        }})();
+        """
+    )
+
+
+def _prepare_dialogue_session(
+    session: BrowserSession, scenario_keys: list[str]
+) -> None:
+    if session.current_patient is None:
+        return
+
+    session.selected_scenarios = scenario_keys
+    session.controller = None
+    session.controllers.clear()
+    session.messages.clear()
+    session.pending_input = None
+    session.simulated_bp = None
+    session.simulated_weight = None
+    session.simulated_oximeter = None
+    session.avatar_messages.clear()
+    session.chat_input_text = ""
+    session.assistant_messages.clear()
+    session.assistant_input_text = ""
+    session.prefilled_answers.clear()
+    session.ai_prefilled_keys.clear()
+    session.chat_phase_done = False
+    session.guided_started = False
+    session.anamnesis_mode = None
+    session.editing_answers = False
+    session.stage = "dialogue"
+
+    for key in scenario_keys:
+        ctrl = DialogueController(
+            scenario_key=key,
+            patient=session.current_patient,
+            display_message=lambda text: _append_system_message(session, text),
+            request_input=lambda callback: _request_dialogue_input(session, callback),
+            # Fragen erst nach dem KI-Vorab-Chat stellen (auch im gefuehrten Modus).
+            defer_anamnesis=True,
+        )
+        ctrl.start()
+        session.controllers.append(ctrl)
+
+
+def _initialize_session_from_url(session: BrowserSession) -> None:
+    state = _request_url_state()
+    page = _normalize_url_page(state.get("page"))
+    patient = _find_patient_by_id(state.get("patient"))
+    scenarios = _scenario_keys_from_value(state.get("scenarios"))
+
+    if patient is not None:
+        session.current_patient = patient
+        session.selected_scenarios = scenarios
+
+    if session.is_personal_mode:
+        if page == URL_PAGE_LOGIN and patient is not None:
+            session.stage = "login"
+        else:
+            session.stage = "staff_selection"
+        return
+
+    if page == URL_PAGE_SCENARIO and patient is not None:
+        session.stage = "scenario"
+        return
+
+    if page in {URL_PAGE_DIALOGUE, URL_PAGE_EDIT} and patient is not None and scenarios:
+        session.stage = "scenario"
+        session.reload_message = "Der laufende Dialog wurde neu gestartet."
+        return
+
+    session.stage = "login"
 
 
 def _format_patient_name(patient: PatientRecord | None) -> str:
@@ -1330,11 +1540,13 @@ def main_page(
         entry_mode=entry_mode,
         stage="staff_selection" if entry_mode == PERSONAL_MODE else "login",
     )
+    _initialize_session_from_url(session)
 
     def refresh_ui() -> None:
         render_header.refresh()
         render_main.refresh()
         render_sidebar.refresh()
+        _sync_browser_url(session)
 
     with ui.column().classes("app-shell gap-6"):
         @ui.refreshable
@@ -1375,6 +1587,8 @@ def main_page(
                     _render_sidebar(session, refresh_ui)
 
                 render_sidebar()
+
+    ui.timer(0.1, lambda: _sync_browser_url(session), once=True)
 
 def _render_login(session: BrowserSession, refresh_ui: Callable[[], None]) -> None:
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
@@ -1488,6 +1702,7 @@ def _complete_successful_login(
     session.login_message = ""
     session.login_tone = "tone-info"
     session.login_blocked_until = None
+    session.reload_message = ""
     session.identity_check = IdentityCheck(PATIENTS, max_attempts=MAX_ATTEMPTS)
     if session.is_personal_mode and session.selected_scenarios:
         _start_scenarios(session, session.selected_scenarios, refresh_ui)
@@ -1513,6 +1728,7 @@ def _back_to_staff_selection(
     session.attempts_left = MAX_ATTEMPTS
     session.login_message = ""
     session.login_tone = "tone-info"
+    session.reload_message = ""
     session.current_patient = None
     session.selected_scenarios.clear()
     refresh_ui()
@@ -1561,10 +1777,14 @@ def _render_scenario_selection(
     has_prepared = getattr(patient, "prepared_scenarios_saved", False) if patient else False
     prepared_keys = set(getattr(patient, "prepared_scenarios", ())) if has_prepared else set()
 
-    selected: set[str] = set(prepared_keys)
+    selected: set[str] = set(session.selected_scenarios or prepared_keys)
 
     with ui.card().classes("surface-card surface-card--strong w-full shadow-none"):
         ui.label("Szenarien auswählen").classes("text-2xl font-semibold")
+        if session.reload_message:
+            ui.label(session.reload_message).classes(
+                "w-full rounded-2xl px-4 py-3 text-sm font-medium tone-warning"
+            )
 
         if has_prepared and prepared_keys:
             titles = [_get_scenario_title(k) for k in sorted(prepared_keys)]
@@ -2184,34 +2404,8 @@ def _start_scenarios(
         ui.notify("Bitte wählen Sie mindestens ein Szenario aus.", color="warning")
         return
 
-    session.selected_scenarios = scenario_keys
-    session.controller = None
-    session.controllers.clear()
-    session.messages.clear()
-    session.pending_input = None
-    session.simulated_bp = None
-    session.simulated_weight = None
-    session.simulated_oximeter = None
-    session.avatar_messages.clear()
-    session.chat_input_text = ""
-    session.prefilled_answers.clear()
-    session.ai_prefilled_keys.clear()
-    session.chat_phase_done = False
-    session.guided_started = False
-    session.anamnesis_mode = None
-    session.stage = "dialogue"
-
-    for key in scenario_keys:
-        ctrl = DialogueController(
-            scenario_key=key,
-            patient=session.current_patient,
-            display_message=lambda text: _append_system_message(session, text),
-            request_input=lambda callback: _request_dialogue_input(session, callback),
-            # Fragen erst nach dem KI-Vorab-Chat stellen (auch im geführten Modus).
-            defer_anamnesis=True,
-        )
-        ctrl.start()
-        session.controllers.append(ctrl)
+    session.reload_message = ""
+    _prepare_dialogue_session(session, scenario_keys)
 
     refresh_ui()
 
