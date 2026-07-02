@@ -1,0 +1,73 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="architecture-diagram-simple" name="Architektur">
+    <mxGraphModel dx="1144" dy="733" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=26;fontStyle=1;fontColor=#111827;" value="Architektur - KI-gestuetzter Anamnese-Agent" vertex="1">
+          <mxGeometry height="40" width="700" x="250" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=none;strokeColor=#9CA3AF;fontSize=18;fontStyle=1;fontColor=#111827;verticalAlign=top;spacingTop=10;" value="Praesentation" vertex="1">
+          <mxGeometry height="170" width="1120" x="40" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-core" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=none;strokeColor=#9CA3AF;fontSize=18;fontStyle=1;fontColor=#111827;verticalAlign=top;spacingTop=10;" value="Fachlogik" vertex="1">
+          <mxGeometry height="210" width="1120" x="40" y="285" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-infra" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=none;strokeColor=#9CA3AF;fontSize=18;fontStyle=1;fontColor=#111827;verticalAlign=top;spacingTop=10;" value="Daten, Integration und Ausgabe" vertex="1">
+          <mxGeometry height="170" width="1120" x="40" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="entry" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#0284C7;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Einstieg&#xa;main.py / main_personal.py&#xa;Patientenmodus oder Personalmodus" vertex="1">
+          <mxGeometry height="95" width="260" x="50" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;strokeWidth=2;fontSize=16;fontColor=#111827;" value="NiceGUI-Weboberflaeche&#xa;Login, Szenarioauswahl, Dialog/Formular, Avatar, Sprache, Export-Buttons" vertex="1">
+          <mxGeometry height="115" width="340" x="430" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="patient-data" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#0891B2;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Patientendaten&#xa;PatientListClient + lokale JSON&#xa;synthetische PatientRecords&#xa;inkl. vorbereiteter Szenarien" vertex="1">
+          <mxGeometry height="110" width="240" x="910" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="controller" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=16;fontColor=#111827;" value="DialogueController + StateMachine&#xa;steuert Einwilligung, Anamnese, Vitalparameter, Red-Flag-Pruefung, Zusammenfassung und Uebergabe" vertex="1">
+          <mxGeometry height="120" width="350" x="425" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="scenarios" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#EA580C;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Szenariomodule A-D&#xa;Husten, Brustschmerz, Hypertonie, Diabetes&#xa;Fragen und bedingte Folgefragen" vertex="1">
+          <mxGeometry height="105" width="270" x="50" y="342.5" as="geometry" />
+        </mxCell>
+        <mxCell id="rules-output" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Regeln und Ausgabe&#xa;RedFlagEngine: warning / critical&#xa;SummaryBuilder: gruppierte Uebergabe&#xa;Export: JSON und PDF" vertex="1">
+          <mxGeometry height="125" width="270" x="880" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#CA8A04;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Optionaler KI-Dienst&#xa;Freitext-Vorabstrukturierung&#xa;Hilfe-Chat zum Fragebogen&#xa;Fallback bei Nichterreichbarkeit" vertex="1">
+          <mxGeometry height="105" width="270" x="60" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="devices" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAE8FF;strokeColor=#A21CAF;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Geraetesimulatoren&#xa;Blutdruck, Gewicht/BMI, Pulsoximeter&#xa;Messwerte mit Herkunftskennzeichnung" vertex="1">
+          <mxGeometry height="105" width="260" x="470" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="output" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;strokeWidth=2;fontSize=16;fontColor=#111827;" value="Ergebnis&#xa;strukturierte Zusammenfassung&#xa;Uebergabe an Praxispersonal&#xa;synthetisches Trainingsdokument" vertex="1">
+          <mxGeometry height="105" width="250" x="890" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="e-entry-ui" edge="1" parent="1" source="entry" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#6B7280;" target="ui">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-ui-data" edge="1" parent="1" source="ui" style="endArrow=block;startArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#0891B2;fontSize=12;" target="patient-data" value="lesen / speichern">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-ui-controller" edge="1" parent="1" source="ui" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#16A34A;fontSize=12;" target="controller" value="startet 1..n Szenarien">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-scenarios-controller" edge="1" parent="1" source="scenarios" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#EA580C;fontSize=12;" target="controller" value="Fragen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-controller-rules" edge="1" parent="1" source="controller" style="endArrow=block;startArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#DC2626;fontSize=12;" target="rules-output" value="Antworten + Vitalwerte">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-ai-ui" edge="1" parent="1" source="ai" style="endArrow=block;startArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#CA8A04;fontSize=12;" target="ui" value="optional">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-devices-controller" edge="1" parent="1" source="devices" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#A21CAF;fontSize=12;" target="controller" value="Messwerte">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-rules-output" edge="1" parent="1" source="rules-output" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#6B7280;" target="output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

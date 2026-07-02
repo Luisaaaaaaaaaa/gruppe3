@@ -1,0 +1,125 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="use-case-diagram-simple" name="Use Cases">
+    <mxGraphModel dx="1212" dy="776" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1250" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#111827;" value="UML-Use-Case-Diagramm - KI-gestützter Anamnese-Agent" vertex="1">
+          <mxGeometry height="40" width="800" x="225" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="system" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#475569;strokeWidth=2;fontSize=18;fontStyle=1;fontColor=#111827;verticalAlign=top;spacingTop=14;align=left;spacingLeft=18;" value="" vertex="1">
+          <mxGeometry height="670" width="820" x="210" y="85" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-patient" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=16;fontColor=#111827;" value="Patient" vertex="1">
+          <mxGeometry height="110" width="55" x="70" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-staff" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=16;fontColor=#111827;" value="Praxispersonal" vertex="1">
+          <mxGeometry height="120" width="85" x="55" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-devices" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=16;fontColor=#111827;" value="Geraete / Simulatoren" vertex="1">
+          <mxGeometry height="120" width="100" x="1110" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-ki" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=16;fontColor=#111827;" value="KI-Dienst" vertex="1">
+          <mxGeometry height="110" width="60" x="1130" y="415" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-login" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Identitaet prüfen" vertex="1">
+          <mxGeometry height="70" width="230" x="250" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-consent" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Rolle erklären und&lt;br&gt;Einwilligung einholen" vertex="1">
+          <mxGeometry height="75" width="250" x="500" y="95" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-select" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Szenarien auswählen" vertex="1">
+          <mxGeometry height="70" width="230" x="225" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-staff-prepare" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E0E7FF;strokeColor=#4F46E5;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Patient und Szenario(e)&#xa;im Personalmodus vorbereiten" vertex="1">
+          <mxGeometry height="80" width="280" x="515" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-staff-edit" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E0E7FF;strokeColor=#4F46E5;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Patientendaten anlegen&#xa;oder bearbeiten" vertex="1">
+          <mxGeometry height="75" width="280" x="240" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-anamnesis" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;strokeWidth=2;fontSize=17;fontStyle=1;fontColor=#111827;" value="Assistierte Anamnese&#xa;durchfuehren" vertex="1">
+          <mxGeometry height="90" width="260" x="520" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-vitals" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FAE8FF;strokeColor=#A21CAF;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Vitalparameter erfassen" vertex="1">
+          <mxGeometry height="70" width="230" x="760" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-ki-prefill" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#CA8A04;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Freie Beschwerden&lt;br&gt;KI-gestützt strukturieren" vertex="1">
+          <mxGeometry height="75" width="230" x="795" y="373" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-help-chat" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FEF9C3;strokeColor=#CA8A04;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Hilfe-Chat nutzen" vertex="1">
+          <mxGeometry height="70" width="230" x="800" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-redflags" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;strokeWidth=2;fontSize=15;fontStyle=1;fontColor=#111827;" value="Red Flags pruefen&#xa;und ggf. eskalieren" vertex="1">
+          <mxGeometry height="80" width="250" x="500" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-summary" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Zusammenfassung erstellen&#xa;und uebergeben" vertex="1">
+          <mxGeometry height="80" width="260" x="310" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-export" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#475569;strokeWidth=2;fontSize=15;fontColor=#111827;" value="Ergebnis als JSON&#xa;oder PDF exportieren" vertex="1">
+          <mxGeometry height="70" width="220" x="220" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="a-patient-login" edge="1" parent="1" source="actor-patient" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-login">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-patient-consent" edge="1" parent="1" source="actor-patient" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-consent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-patient-select" edge="1" parent="1" source="actor-patient" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-select">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-patient-anamnesis" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-anamnesis">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+            <mxPoint x="120" y="284.5962732919256" as="sourcePoint" />
+            <mxPoint x="495" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a-staff-prepare" edge="1" parent="1" source="actor-staff" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-staff-prepare">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-staff-edit" edge="1" parent="1" source="actor-staff" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-staff-edit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-staff-summary" edge="1" parent="1" source="actor-staff" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-summary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-staff-export" edge="1" parent="1" source="actor-staff" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#64748B;" target="uc-export">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-devices-vitals" edge="1" parent="1" source="actor-devices" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#A21CAF;" target="uc-vitals">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-ki-prefill" edge="1" parent="1" source="actor-ki" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#CA8A04;" target="uc-ki-prefill">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-ki-chat" edge="1" parent="1" source="actor-ki" style="endArrow=none;html=1;rounded=0;strokeWidth=2;strokeColor=#CA8A04;" target="uc-help-chat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc-select-anamnesis" edge="1" parent="1" source="uc-anamnesis" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#2563EB;fontSize=12;fontColor=#2563EB;" target="uc-select" value="&lt;&lt;include&gt;&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc-vitals-anamnesis" edge="1" parent="1" source="uc-anamnesis" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#A21CAF;fontSize=12;fontColor=#A21CAF;" target="uc-vitals" value="&lt;&lt;include&gt;&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc-redflags-anamnesis" edge="1" parent="1" source="uc-anamnesis" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#DC2626;fontSize=12;fontColor=#DC2626;" target="uc-redflags" value="&lt;&lt;include&gt;&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc-summary-anamnesis" edge="1" parent="1" source="uc-anamnesis" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#6B7280;fontSize=12;fontColor=#6B7280;" target="uc-summary" value="&lt;&lt;include&gt;&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-prefill-anamnesis" edge="1" parent="1" source="uc-ki-prefill" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#CA8A04;fontSize=12;fontColor=#A16207;" target="uc-anamnesis" value="&lt;&lt;extend&gt;&gt;&#xa;optional">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-chat-anamnesis" edge="1" parent="1" source="uc-help-chat" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#CA8A04;fontSize=12;fontColor=#A16207;" target="uc-anamnesis" value="&lt;&lt;extend&gt;&gt;&#xa;optional">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc-export-summary" edge="1" parent="1" source="uc-summary" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#475569;fontSize=12;fontColor=#475569;" target="uc-export" value="&lt;&lt;include&gt;&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow-staff-anamnesis" edge="1" parent="1" source="uc-staff-prepare" style="endArrow=open;endFill=0;html=1;rounded=0;dashed=1;strokeWidth=2;strokeColor=#4F46E5;fontSize=12;fontColor=#4F46E5;" target="uc-anamnesis" value="startet vorbereitete Anamnese">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
