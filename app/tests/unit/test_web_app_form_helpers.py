@@ -2,17 +2,21 @@ from types import SimpleNamespace
 
 from nicegui import ui
 
+from app.dialogue.state_machine import DialogueState
 from app.ui.web_app import (
+    BrowserSession,
     ChatEntry,
     _BloodPressureField,
     _SliderField,
     _append_guided_answer_history,
+    _apply_simulator_answers_to_guided_dialogue,
     _clear_simulator_state_for_manual_input,
     _device_prefilled_answers,
     _device_prefilled_sources,
     _merged_anamnesis_answers,
     _split_multiline_field,
     _set_unknown_state,
+    _simulator_answers_for_kind,
     _simulate_oximeter_in_form,
     _simulate_weight_in_form,
     _update_simulator_state_from_form,
@@ -409,6 +413,55 @@ def test_device_prefill_maps_sidebar_simulator_values_to_anamnesis_fields() -> N
         "spo2": "simuliert",
         "puls": "simuliert",
     }
+
+
+def test_simulator_answer_mapping_uses_anamnesis_question_keys() -> None:
+    assert _simulator_answers_for_kind(
+        "blood_pressure",
+        {"systolisch": 131, "diastolisch": 76},
+    ) == {
+        "blutdruck_systolisch": "131",
+        "blutdruck_diastolisch": "76",
+    }
+    assert _simulator_answers_for_kind("weight", {"gewicht": 67.0}) == {
+        "gewicht": "67.0",
+        "gewicht_aktuell": "67.0",
+    }
+    assert _simulator_answers_for_kind("oximeter", {"spo2": 98, "puls": 78}) == {
+        "spo2": "98",
+        "puls": "78",
+    }
+
+
+def test_sidebar_simulator_answer_is_added_to_guided_dialogue() -> None:
+    question = SimpleNamespace(
+        key="puls",
+        text="Wie hoch ist Ihr aktueller Puls?",
+    )
+    applied: list[tuple[dict[str, str], bool]] = []
+    controller = SimpleNamespace(
+        current_question=question,
+        get_questions_with_answers=lambda: [(question, "")],
+        state=DialogueState.ANAMNESIS,
+        apply_anamnesis_answers=lambda answers, continue_dialogue=False: applied.append(
+            (answers.copy(), continue_dialogue)
+        ),
+    )
+    session = BrowserSession(anamnesis_mode="guided")
+    session.messages.append(ChatEntry(role="system", text=question.text, tone="system"))
+
+    _apply_simulator_answers_to_guided_dialogue(
+        session,
+        [controller],
+        {"puls": "82"},
+    )
+
+    assert session.draft_answers["puls"] == "82"
+    assert [(entry.role, entry.text) for entry in session.messages] == [
+        ("system", question.text),
+        ("user", "82"),
+    ]
+    assert applied == [({"puls": "82"}, True)]
 
 
 def test_form_simulator_updates_sidebar_state_and_controller_vitals() -> None:

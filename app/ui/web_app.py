@@ -3122,10 +3122,16 @@ def _build_question_form(
             sources["diastolisch"] = source
         return sources
 
+    def _remember_current_draft_answers() -> dict[str, str]:
+        collected = _collect_values()
+        _remember_draft_answers(session, collected)
+        return collected
+
     def _run_live_escalation() -> bool:
+        collected = _remember_current_draft_answers()
         if live_escalation_callback is None:
             return False
-        return live_escalation_callback(_collect_values())
+        return live_escalation_callback(collected)
 
     def _refresh_visibility() -> None:
         if not live_visibility:
@@ -4481,6 +4487,57 @@ def _device_prefilled_sources(session: BrowserSession) -> dict[str, str]:
     return sources
 
 
+def _simulator_answers_for_kind(kind: str, values: dict) -> dict[str, str]:
+    if kind == "blood_pressure":
+        return {
+            "blutdruck_systolisch": str(values["systolisch"]),
+            "blutdruck_diastolisch": str(values["diastolisch"]),
+        }
+    if kind == "weight":
+        weight = values.get("gewicht")
+        if weight is None:
+            return {}
+        return {
+            "gewicht": str(weight),
+            "gewicht_aktuell": str(weight),
+        }
+    if kind == "pulse":
+        pulse = values.get("puls")
+        return {"puls": str(pulse)} if pulse is not None else {}
+    if kind == "oximeter":
+        answers: dict[str, str] = {}
+        spo2 = values.get("spo2")
+        pulse = values.get("puls")
+        if spo2 is not None:
+            answers["spo2"] = str(spo2)
+        if pulse is not None:
+            answers["puls"] = str(pulse)
+        return answers
+    return {}
+
+
+def _apply_simulator_answers_to_guided_dialogue(
+    session: BrowserSession,
+    controllers: list[DialogueController],
+    answers: dict[str, str],
+) -> None:
+    if not answers:
+        return
+
+    _remember_draft_answers(session, answers)
+    if session.anamnesis_mode != "guided":
+        return
+
+    _append_guided_answer_history(session, controllers, answers)
+    merged_answers = _merged_anamnesis_answers(session, controllers)
+    for controller in controllers:
+        if controller is not None and controller.state == DialogueState.ANAMNESIS:
+            controller.apply_anamnesis_answers(
+                merged_answers,
+                continue_dialogue=True,
+            )
+
+
 def _update_simulator_state_from_form(
     session: BrowserSession,
     kind: str,
@@ -5093,16 +5150,18 @@ def _simulate_bp(session: BrowserSession, refresh_ui: Callable[[], None]) -> Non
         "systolisch": session.simulated_bp["systolisch"],
         "diastolisch": session.simulated_bp["diastolisch"],
     }
+    answers = _simulator_answers_for_kind("blood_pressure", values)
     for controller in controllers:
         controller.record_vitals(values, "simuliert")
     if _check_live_form_escalation(
         session,
         controllers,
-        {},
+        answers,
         refresh_ui,
         values,
     ):
         return
+    _apply_simulator_answers_to_guided_dialogue(session, controllers, answers)
     refresh_ui()
 
 
@@ -5118,16 +5177,18 @@ def _simulate_weight(session: BrowserSession, refresh_ui: Callable[[], None]) ->
     session.simulated_weight = sim.gewicht()
     controllers = session.controllers or ([session.controller] if session.controller else [])
     values = {"gewicht": session.simulated_weight["gewicht"]}
+    answers = _simulator_answers_for_kind("weight", values)
     for controller in controllers:
         controller.record_vitals(values, "simuliert")
     if _check_live_form_escalation(
         session,
         controllers,
-        {},
+        answers,
         refresh_ui,
         values,
     ):
         return
+    _apply_simulator_answers_to_guided_dialogue(session, controllers, answers)
     refresh_ui()
 
 
@@ -5146,16 +5207,18 @@ def _simulate_oximeter(session: BrowserSession, refresh_ui: Callable[[], None]) 
         "spo2": session.simulated_oximeter["spo2"],
         "puls": session.simulated_oximeter["puls"],
     }
+    answers = _simulator_answers_for_kind("oximeter", values)
     for controller in controllers:
         controller.record_vitals(values, "simuliert")
     if _check_live_form_escalation(
         session,
         controllers,
-        {},
+        answers,
         refresh_ui,
         values,
     ):
         return
+    _apply_simulator_answers_to_guided_dialogue(session, controllers, answers)
     refresh_ui()
 
 
