@@ -5011,7 +5011,7 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             with ui.column().classes("w-full gap-1"):
                 with ui.row().classes("w-full items-center justify-between"):
                     ui.label("Gewicht").classes("text-sm font-semibold")
-                    ui.button("Simulieren",
+                    ui.button("Simulieren", icon="scale",
                               on_click=lambda: _simulate_weight(session, refresh_ui)
                               ).props("dense outline")
                 if session.simulated_weight:
@@ -5023,7 +5023,7 @@ def _render_sidebar(session: BrowserSession, refresh_ui: Callable[[], None]) -> 
             with ui.column().classes("w-full gap-1"):
                 with ui.row().classes("w-full items-center justify-between"):
                     ui.label("Pulsoximeter").classes("text-sm font-semibold")
-                    ui.button("Simulieren",
+                    ui.button("Simulieren", icon="favorite",
                               on_click=lambda: _simulate_oximeter(session, refresh_ui)
                               ).props("dense outline")
                 if session.simulated_oximeter:
