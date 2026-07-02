@@ -117,14 +117,14 @@ def test_medication_follow_ups_depend_on_yes_no_answers() -> None:
     )
 
 
-def test_hypertension_keeps_known_conditions_question_with_file_diagnoses() -> None:
+def test_hypertension_replaces_known_conditions_question_with_file_diagnoses() -> None:
     controller = _controller(
         details=PatientDetails(long_term_diagnoses=("Essentielle Hypertonie (I10)",))
     )
     keys = [question.key for question, _answer in controller.get_questions_with_answers()]
 
     assert "vorerkrankungen_liste" in keys
-    assert "vorerkrankungen" in keys
+    assert "vorerkrankungen" not in keys
 
 
 def test_critical_hypertension_answer_interrupts_immediately() -> None:

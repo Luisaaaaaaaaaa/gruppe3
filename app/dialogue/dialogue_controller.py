@@ -317,8 +317,11 @@ class DialogueController:
 
         questions: list[AnamnesisQuestion] = []
 
+        def wird_durch_akte_ersetzt(question: AnamnesisQuestion) -> bool:
+            return hat_akten_daten and question.key in akten_keys
+
         # 1. Erste Frage des Szenarios
-        if scenario_qs:
+        if scenario_qs and not wird_durch_akte_ersetzt(scenario_qs[0]):
             questions.append(scenario_qs[0])
 
         # 2. Vorerkrankungen & Risikofaktoren aus der Akte (Position 2)
@@ -328,14 +331,8 @@ class DialogueController:
         # 3. Restliche Szenario-Fragen (überspringe alte vorerkrankungen/risikofaktoren,
         #    wenn Akten-Daten vorhanden sind)
         for q in scenario_qs[1:]:
-            if hat_akten_daten and q.key in akten_keys:
-                # Szenario C fordert laut SET explizit die Frage nach bekannten
-                # Vorerkrankungen; Aktenhinweise ersetzen sie dort nicht.
-                if not (
-                    self._scenario_id == "hypertension"
-                    and q.key == "vorerkrankungen"
-                ):
-                    continue
+            if wird_durch_akte_ersetzt(q):
+                continue
             questions.append(q)
 
         # 4. Medikamenten-Fragen
@@ -508,6 +505,43 @@ class DialogueController:
             return
 
         self._ask_next_question()
+
+    def apply_anamnesis_answers(
+        self,
+        answers: dict[str, str],
+        continue_dialogue: bool = False,
+    ) -> bool:
+        """Uebernimmt vorhandene Antworten waehrend der laufenden Anamnese.
+
+        Wird von der Weboberflaeche beim Wechsel zwischen Formular und
+        gefuehrtem Dialog genutzt. Wenn die aktuelle Frage dadurch beantwortet
+        ist, springt der Dialog zur naechsten offenen Frage.
+        """
+        if self.state != DialogueState.ANAMNESIS:
+            return False
+
+        for question in self._questions:
+            value = str(answers.get(question.key, "")).strip()
+            if value and self._is_valid_answer(question, value):
+                self._answers[question.key] = value
+
+        if self._escalate_critical_acute_answers():
+            return True
+
+        if not continue_dialogue:
+            return False
+
+        current = self.current_question
+        if current is None:
+            return False
+
+        current_value = (self._answers.get(current.key) or "").strip()
+        if not self._should_ask_question(current) or (
+            current_value and self._is_valid_answer(current, current_value)
+        ):
+            self._ask_next_question()
+
+        return False
 
     def _is_valid_answer(self, question: AnamnesisQuestion, value: str) -> bool:
         """Prueft, ob ein (z. B. von der KI gelieferter) Wert zum Fragetyp passt."""

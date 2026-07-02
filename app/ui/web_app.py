@@ -590,6 +590,10 @@ class BrowserSession:
     assistant_messages: list[ChatEntry] = field(default_factory=list)
     assistant_input_text: str = ""
     prefilled_answers: dict[str, str] = field(default_factory=dict)
+    draft_answers: dict[str, str] = field(default_factory=dict)
+    guided_answer_message_keys: set[str] = field(default_factory=set)
+    guided_answer_message_values: dict[str, str] = field(default_factory=dict)
+    guided_answer_message_indices: dict[str, int] = field(default_factory=dict)
     ai_prefilled_keys: set[str] = field(default_factory=set)
     chat_phase_done: bool = False
     guided_started: bool = False
@@ -625,6 +629,10 @@ class BrowserSession:
         self.assistant_messages.clear()
         self.assistant_input_text = ""
         self.prefilled_answers.clear()
+        self.draft_answers.clear()
+        self.guided_answer_message_keys.clear()
+        self.guided_answer_message_values.clear()
+        self.guided_answer_message_indices.clear()
         self.ai_prefilled_keys.clear()
         self.chat_phase_done = False
         self.guided_started = False
@@ -939,6 +947,10 @@ def _prepare_dialogue_session(
     session.assistant_messages.clear()
     session.assistant_input_text = ""
     session.prefilled_answers.clear()
+    session.draft_answers.clear()
+    session.guided_answer_message_keys.clear()
+    session.guided_answer_message_values.clear()
+    session.guided_answer_message_indices.clear()
     session.ai_prefilled_keys.clear()
     session.chat_phase_done = False
     session.guided_started = False
@@ -1122,6 +1134,10 @@ def _confirm_reject_consent(
     session.chat_phase_done = False
     session.guided_started = False
     session.prefilled_answers.clear()
+    session.draft_answers.clear()
+    session.guided_answer_message_keys.clear()
+    session.guided_answer_message_values.clear()
+    session.guided_answer_message_indices.clear()
     session.ai_prefilled_keys.clear()
     session.current_patient = None
     session.login_message = ""
@@ -1136,6 +1152,206 @@ def _dismiss_reject_consent_dialog(
     session: BrowserSession, refresh_ui: Callable[[], None]
 ) -> None:
     session.show_reject_consent_dialog = False
+    refresh_ui()
+
+
+def _remember_draft_answers(session: BrowserSession, answers: dict[str, str]) -> None:
+    if not hasattr(session, "draft_answers"):
+        session.draft_answers = {}
+    for key, value in answers.items():
+        session.draft_answers[key] = str(value).strip()
+
+
+def _mark_guided_answer_message(
+    session: BrowserSession,
+    question_key: str,
+    value: str,
+    message_index: int | None = None,
+) -> None:
+    if not hasattr(session, "guided_answer_message_keys"):
+        session.guided_answer_message_keys = set()
+    if not hasattr(session, "guided_answer_message_values"):
+        session.guided_answer_message_values = {}
+    if not hasattr(session, "guided_answer_message_indices"):
+        session.guided_answer_message_indices = {}
+    session.guided_answer_message_keys.add(question_key)
+    session.guided_answer_message_values[question_key] = _normalize_answer_for_chat(value)
+    if message_index is not None:
+        session.guided_answer_message_indices[question_key] = message_index
+
+
+def _active_controllers(session: BrowserSession) -> list[DialogueController]:
+    return session.controllers or (
+        [session.controller] if session.controller is not None else []
+    )
+
+
+def _controller_answer_values(
+    controllers: list[DialogueController],
+) -> dict[str, str]:
+    answers: dict[str, str] = {}
+    for ctrl in controllers:
+        for question, answer in ctrl.get_questions_with_answers():
+            value = str(answer).strip()
+            if value:
+                answers[question.key] = value
+    return answers
+
+
+def _merged_anamnesis_answers(
+    session: BrowserSession,
+    controllers: list[DialogueController] | None = None,
+) -> dict[str, str]:
+    controllers = controllers if controllers is not None else _active_controllers(session)
+    merged = _merged_prefilled_answers(session)
+    merged.update(_controller_answer_values(controllers))
+    merged.update(
+        {
+            key: str(value).strip()
+            for key, value in getattr(session, "draft_answers", {}).items()
+            if str(value).strip()
+        }
+    )
+    return merged
+
+
+def _normalize_answer_for_chat(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in ("ja", "j", "yes", "y"):
+        return "Ja"
+    if normalized in ("nein", "n", "no"):
+        return "Nein"
+    return value.strip()
+
+
+def _insert_guided_messages(
+    session: BrowserSession,
+    index: int,
+    entries: list[ChatEntry],
+) -> None:
+    if not entries:
+        return
+    if not hasattr(session, "guided_answer_message_indices"):
+        session.guided_answer_message_indices = {}
+
+    index = max(0, min(index, len(session.messages)))
+    session.messages[index:index] = entries
+    offset = len(entries)
+    for key, answer_index in list(session.guided_answer_message_indices.items()):
+        if answer_index >= index:
+            session.guided_answer_message_indices[key] = answer_index + offset
+
+
+def _find_pending_question_index(
+    session: BrowserSession,
+    question_text: str,
+) -> int | None:
+    for index in range(len(session.messages) - 1, -1, -1):
+        entry = session.messages[index]
+        if entry.role == "system" and entry.text.strip() == question_text.strip():
+            return index
+    return None
+
+
+def _append_guided_answer_history(
+    session: BrowserSession,
+    controllers: list[DialogueController],
+    answers: dict[str, str],
+) -> None:
+    if not hasattr(session, "guided_answer_message_keys"):
+        session.guided_answer_message_keys = set()
+    if not hasattr(session, "guided_answer_message_values"):
+        session.guided_answer_message_values = {}
+    if not hasattr(session, "guided_answer_message_indices"):
+        session.guided_answer_message_indices = {}
+
+    pending_index_by_key: dict[str, int] = {}
+    for ctrl in controllers:
+        current = getattr(ctrl, "current_question", None) if ctrl is not None else None
+        if current is None:
+            continue
+        index = _find_pending_question_index(session, current.text)
+        if index is None:
+            continue
+        pending_index_by_key[current.key] = index
+
+    insertion_index = (
+        min(pending_index_by_key.values())
+        if pending_index_by_key
+        else len(session.messages)
+    )
+
+    for ctrl in controllers:
+        for question, _answer in ctrl.get_questions_with_answers():
+            value = str(answers.get(question.key, "")).strip()
+            if not value:
+                continue
+            display_value = _normalize_answer_for_chat(value)
+            if session.guided_answer_message_values.get(question.key) == display_value:
+                continue
+
+            existing_index = session.guided_answer_message_indices.get(question.key)
+            if existing_index is not None and existing_index < len(session.messages):
+                existing_entry = session.messages[existing_index]
+                if existing_entry.role == "user":
+                    existing_entry.text = display_value
+                    existing_entry.tone = "user"
+                    session.guided_answer_message_values[question.key] = display_value
+                    continue
+
+            pending_index = pending_index_by_key.get(question.key)
+            if pending_index is not None:
+                _insert_guided_messages(
+                    session,
+                    pending_index + 1,
+                    [ChatEntry(role="user", text=display_value, tone="user")],
+                )
+                session.guided_answer_message_keys.add(question.key)
+                session.guided_answer_message_values[question.key] = display_value
+                session.guided_answer_message_indices[question.key] = (
+                    pending_index + 1
+                )
+                insertion_index = max(insertion_index, pending_index + 2)
+                continue
+
+            _insert_guided_messages(
+                session,
+                insertion_index,
+                [
+                    ChatEntry(role="system", text=question.text, tone="system"),
+                    ChatEntry(role="user", text=display_value, tone="user"),
+                ],
+            )
+            session.guided_answer_message_keys.add(question.key)
+            session.guided_answer_message_values[question.key] = display_value
+            session.guided_answer_message_indices[question.key] = insertion_index + 1
+            insertion_index += 2
+
+
+def _switch_anamnesis_mode(
+    session: BrowserSession,
+    mode: str,
+    refresh_ui: Callable[[], None],
+    answers: dict[str, str] | None = None,
+) -> None:
+    if answers is not None:
+        _remember_draft_answers(session, answers)
+
+    session.anamnesis_mode = mode
+
+    if mode == "guided":
+        session.spoken_message_count = 0
+        controllers = _active_controllers(session)
+        merged_answers = _merged_anamnesis_answers(session, controllers)
+        _append_guided_answer_history(session, controllers, merged_answers)
+        if session.guided_started:
+            for ctrl in controllers:
+                if ctrl.state == DialogueState.ANAMNESIS:
+                    ctrl.apply_anamnesis_answers(
+                        merged_answers,
+                        continue_dialogue=True,
+                    )
+
     refresh_ui()
 
 
@@ -1159,6 +1375,14 @@ def _answer_yes_no(
     session.messages.append(
         ChatEntry(role="user", text=answer, tone="user")
     )
+    if current_q is not None:
+        _remember_draft_answers(session, {current_q.key: answer})
+        _mark_guided_answer_message(
+            session,
+            current_q.key,
+            answer,
+            len(session.messages) - 1,
+        )
     callback = session.pending_input
     session.pending_input = None
     callback(answer)
@@ -1494,7 +1718,6 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
                 refresh_ui,
             ):
                 return
-
         session.messages.append(
             ChatEntry(
                 role="user",
@@ -1502,6 +1725,14 @@ def _render_guided_dialogue(session: BrowserSession, refresh_ui: Callable[[], No
                 tone="user",
             )
         )
+        if current_q is not None:
+            _remember_draft_answers(session, {current_q.key: answer})
+            _mark_guided_answer_message(
+                session,
+                current_q.key,
+                answer,
+                len(session.messages) - 1,
+            )
         callback = session.pending_input
         session.pending_input = None
         answer_input.value = ""
@@ -2822,6 +3053,7 @@ def _build_question_form(
     session: BrowserSession,
     controller: DialogueController,
     questions_with_answers: list[tuple],
+    refresh_ui: Callable[[], None],
     title: str,
     description: str,
     submit_label: str,
@@ -2996,6 +3228,8 @@ def _build_question_form(
         with ui.row().classes("w-full items-start justify-between gap-4 flex-wrap"):
             ui.label(title).classes("text-2xl font-semibold")
             ui.label(description).classes("text-[1rem] leading-7 text-slate-600")
+
+        _render_anamnesis_mode_toolbar(session, refresh_ui, _collect_values)
 
         for question, answer in questions_with_answers:
             key = question.key
@@ -3544,6 +3778,10 @@ def _do_reset_session(session: BrowserSession) -> None:
     session.critical_confirmation_open = False
     session.guided_started = False
     session.prefilled_answers.clear()
+    session.draft_answers.clear()
+    session.guided_answer_message_keys.clear()
+    session.guided_answer_message_values.clear()
+    session.guided_answer_message_indices.clear()
     session.ai_prefilled_keys.clear()
     session.stage = "staff_selection" if session.is_personal_mode else "scenario"
 
@@ -3765,10 +4003,10 @@ def _render_anamnesis_mode_choice(
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Bitte sprich mit mir",
-                    on_click=lambda: (
-                        setattr(session, "anamnesis_mode", "guided"),
-                        setattr(session, "spoken_message_count", 0),
-                        refresh_ui(),
+                    on_click=lambda: _switch_anamnesis_mode(
+                        session,
+                        "guided",
+                        refresh_ui,
                     ),
                 ).props("unelevated").classes("mt-4 w-full bg-[#0f766e] text-white")
 
@@ -3785,9 +4023,10 @@ def _render_anamnesis_mode_choice(
                 ).classes("mt-3 text-[0.95rem] leading-6 text-slate-600")
                 ui.button(
                     "Formular verwenden",
-                    on_click=lambda: (
-                        setattr(session, "anamnesis_mode", "form"),
-                        refresh_ui(),
+                    on_click=lambda: _switch_anamnesis_mode(
+                        session,
+                        "form",
+                        refresh_ui,
                     ),
                 ).props("outline").classes(
                     "mt-4 w-full border-[var(--app-accent)] text-[var(--app-accent)]"
@@ -3795,7 +4034,9 @@ def _render_anamnesis_mode_choice(
 
 
 def _render_anamnesis_mode_toolbar(
-    session: BrowserSession, refresh_ui: Callable[[], None]
+    session: BrowserSession,
+    refresh_ui: Callable[[], None],
+    collect_answers: Callable[[], dict[str, str]] | None = None,
 ) -> None:
     if session.primary_controller is None or session.primary_controller.state != DialogueState.ANAMNESIS:
         return
@@ -3808,17 +4049,20 @@ def _render_anamnesis_mode_toolbar(
         with ui.row().classes("w-full gap-3 flex-wrap mt-3"):
             ui.button(
                 "Bitte sprich mit mir",
-                on_click=lambda: (
-                    setattr(session, "anamnesis_mode", "guided"),
-                    setattr(session, "spoken_message_count", 0),
-                    refresh_ui(),
+                on_click=lambda: _switch_anamnesis_mode(
+                    session,
+                    "guided",
+                    refresh_ui,
+                    collect_answers() if collect_answers is not None else None,
                 ),
             ).props("unelevated").classes("bg-[#0f766e] text-white")
             ui.button(
                 "Formular verwenden",
-                on_click=lambda: (
-                    setattr(session, "anamnesis_mode", "form"),
-                    refresh_ui(),
+                on_click=lambda: _switch_anamnesis_mode(
+                    session,
+                    "form",
+                    refresh_ui,
+                    collect_answers() if collect_answers is not None else None,
                 ),
             ).props("outline").classes(
                 "border-[var(--app-accent)] text-[var(--app-accent)]"
@@ -3988,6 +4232,10 @@ def _render_symptom_chat(
 
         def _on_skip() -> None:
             session.prefilled_answers = {}
+            session.draft_answers.clear()
+            session.guided_answer_message_keys.clear()
+            session.guided_answer_message_values.clear()
+            session.guided_answer_message_indices.clear()
             session.ai_prefilled_keys.clear()
             session.chat_phase_done = True
             refresh_ui()
@@ -4023,6 +4271,7 @@ def _apply_symptom_chat_prefill(
     session.prefilled_answers = dict(prefilled)
     session.ai_prefilled_keys = set(prefilled)
     session.chat_phase_done = True
+    _remember_draft_answers(session, prefilled)
 
     if not prefilled:
         return False
@@ -4184,9 +4433,11 @@ def _begin_guided_questions(session: BrowserSession) -> None:
     controllers = session.controllers or (
         [session.primary_controller] if session.primary_controller else []
     )
+    answers = _merged_anamnesis_answers(session, controllers)
+    _append_guided_answer_history(session, controllers, answers)
     for ctrl in controllers:
         if ctrl is not None and ctrl.state == DialogueState.ANAMNESIS:
-            ctrl.begin_anamnesis(session.prefilled_answers)
+            ctrl.begin_anamnesis(answers)
 
 
 def _device_prefilled_answers(session: BrowserSession) -> dict[str, str]:
@@ -4366,15 +4617,15 @@ def _render_mass_anamnesis_single(
 
     if session.anamnesis_mode == "guided":
         _begin_guided_questions(session)
+        _render_anamnesis_mode_toolbar(session, refresh_ui)
         _render_guided_dialogue(session, refresh_ui)
         return
 
     questions_with_answers = ctrl.get_questions_with_answers()
 
-    _render_anamnesis_mode_toolbar(session, refresh_ui)
-
     def _on_submit(answers: dict[str, str], vital_sources: dict[str, str]) -> None:
         try:
+            _remember_draft_answers(session, answers)
             ctrl.submit_mass_anamnesis(answers, vital_sources)
             refresh_ui()
         except ValueError as exc:
@@ -4388,6 +4639,7 @@ def _render_mass_anamnesis_single(
         session=session,
         controller=ctrl,
         questions_with_answers=questions_with_answers,
+        refresh_ui=refresh_ui,
         title="Anamnese",
         description=(
             "Alle Fragen auf einen Blick. Pflichtfelder sind mit * markiert. "
@@ -4397,7 +4649,7 @@ def _render_mass_anamnesis_single(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
-        prefilled=_merged_prefilled_answers(session),
+        prefilled=_merged_anamnesis_answers(session, [ctrl]),
         live_escalation_callback=lambda answers: _check_live_form_escalation(
             session, [ctrl], answers, refresh_ui
         ),
@@ -4432,6 +4684,7 @@ def _render_mass_anamnesis_multi(
 
     if session.anamnesis_mode == "guided":
         _begin_guided_questions(session)
+        _render_anamnesis_mode_toolbar(session, refresh_ui)
         _render_guided_dialogue(session, refresh_ui)
         return
 
@@ -4459,8 +4712,6 @@ def _render_mass_anamnesis_multi(
 
     questions_with_answers = qa_for_form
 
-    _render_anamnesis_mode_toolbar(session, refresh_ui)
-
     required_keys_all: set[str] = set()
     q_text_map: dict[str, str] = {}
     input_types: dict[str, str] = {}
@@ -4471,6 +4722,7 @@ def _render_mass_anamnesis_multi(
 
     def _on_submit(answers: dict[str, str], vital_sources: dict[str, str]) -> None:
         try:
+            _remember_draft_answers(session, answers)
             for ctrl in controllers:
                 ctrl.submit_mass_anamnesis(answers, vital_sources)
             refresh_ui()
@@ -4489,6 +4741,7 @@ def _render_mass_anamnesis_multi(
         session=session,
         controller=controllers[0],
         questions_with_answers=questions_with_answers,
+        refresh_ui=refresh_ui,
         title=f"Anamnese — {scenario_text}",
         description=(
             f"Alle Fragen aus den ausgewählten Szenarien auf einen Blick. "
@@ -4499,7 +4752,7 @@ def _render_mass_anamnesis_multi(
         submit_callback=_on_submit,
         cancel_callback=_on_cancel,
         live_visibility=True,
-        prefilled=_merged_prefilled_answers(session),
+        prefilled=_merged_anamnesis_answers(session, controllers),
         live_escalation_callback=lambda answers: _check_live_form_escalation(
             session, controllers, answers, refresh_ui
         ),
@@ -4527,6 +4780,7 @@ def _render_answer_editor(
 
     def _on_submit(answers: dict[str, str], vital_sources: dict[str, str]) -> None:
         try:
+            _remember_draft_answers(session, answers)
             for c in session.controllers:
                 c.update_answers_and_regenerate(answers, vital_sources)
             session.editing_answers = False
@@ -4538,6 +4792,7 @@ def _render_answer_editor(
         session=session,
         controller=ctrl,
         questions_with_answers=questions_with_answers,
+        refresh_ui=refresh_ui,
         title="Antworten bearbeiten",
         description=(
             "Alle Fragen auf einen Blick. Aenderungen werden nach dem Speichern "

@@ -3,11 +3,14 @@ from types import SimpleNamespace
 from nicegui import ui
 
 from app.ui.web_app import (
+    ChatEntry,
     _BloodPressureField,
     _SliderField,
+    _append_guided_answer_history,
     _clear_simulator_state_for_manual_input,
     _device_prefilled_answers,
     _device_prefilled_sources,
+    _merged_anamnesis_answers,
     _split_multiline_field,
     _set_unknown_state,
     _simulate_oximeter_in_form,
@@ -42,6 +45,231 @@ def test_split_multiline_field_keeps_empty_edit_as_empty_tuple() -> None:
         "Hypertonie",
         "Diabetes",
     )
+
+
+def test_merged_anamnesis_answers_prefers_latest_draft_values() -> None:
+    question_symptom = SimpleNamespace(key="symptom")
+    question_duration = SimpleNamespace(key="duration")
+    controller = SimpleNamespace(
+        get_questions_with_answers=lambda: [
+            (question_symptom, "controller"),
+            (question_duration, "seit gestern"),
+        ]
+    )
+    session = SimpleNamespace(
+        prefilled_answers={"symptom": "ki", "temperature": "38"},
+        draft_answers={"symptom": "draft"},
+        simulated_bp=None,
+        simulated_weight=None,
+        simulated_oximeter=None,
+    )
+
+    merged = _merged_anamnesis_answers(session, [controller])
+
+    assert merged["symptom"] == "draft"
+    assert merged["duration"] == "seit gestern"
+    assert merged["temperature"] == "38"
+
+
+def test_guided_answer_history_adds_form_answers_once() -> None:
+    question_symptom = SimpleNamespace(
+        key="symptom",
+        text="Welche Beschwerden haben Sie?",
+    )
+    question_duration = SimpleNamespace(
+        key="duration",
+        text="Seit wann bestehen die Beschwerden?",
+    )
+    controller = SimpleNamespace(
+        get_questions_with_answers=lambda: [
+            (question_symptom, ""),
+            (question_duration, ""),
+        ],
+        is_question_visible=lambda key, answers: True,
+    )
+    session = SimpleNamespace(
+        messages=[],
+        guided_answer_message_keys=set(),
+        guided_answer_message_values={},
+        guided_answer_message_indices={},
+    )
+
+    _append_guided_answer_history(
+        session,
+        [controller],
+        {"symptom": "Husten", "duration": "seit gestern"},
+    )
+    _append_guided_answer_history(
+        session,
+        [controller],
+        {"symptom": "Husten", "duration": "seit gestern"},
+    )
+
+    assert [
+        (entry.role, entry.text)
+        for entry in session.messages
+    ] == [
+        ("system", "Welche Beschwerden haben Sie?"),
+        ("user", "Husten"),
+        ("system", "Seit wann bestehen die Beschwerden?"),
+        ("user", "seit gestern"),
+    ]
+    assert session.guided_answer_message_keys == {"symptom", "duration"}
+    assert session.guided_answer_message_values == {
+        "symptom": "Husten",
+        "duration": "seit gestern",
+    }
+    assert session.guided_answer_message_indices == {
+        "symptom": 1,
+        "duration": 3,
+    }
+
+
+def test_guided_answer_history_includes_later_form_answers_even_if_not_visible() -> None:
+    question_first = SimpleNamespace(
+        key="first",
+        text="Erste Frage?",
+    )
+    question_later = SimpleNamespace(
+        key="later",
+        text="Spaetere Frage?",
+    )
+    controller = SimpleNamespace(
+        get_questions_with_answers=lambda: [
+            (question_first, ""),
+            (question_later, ""),
+        ],
+        is_question_visible=lambda key, answers: key != "later",
+    )
+    session = SimpleNamespace(
+        messages=[],
+        guided_answer_message_keys=set(),
+        guided_answer_message_values={},
+        guided_answer_message_indices={},
+    )
+
+    _append_guided_answer_history(
+        session,
+        [controller],
+        {"later": "schon beantwortet"},
+    )
+
+    assert [
+        (entry.role, entry.text)
+        for entry in session.messages
+    ] == [
+        ("system", "Spaetere Frage?"),
+        ("user", "schon beantwortet"),
+    ]
+
+
+def test_guided_answer_history_updates_changed_form_answer_in_place() -> None:
+    question = SimpleNamespace(
+        key="symptom",
+        text="Welche Beschwerden haben Sie?",
+    )
+    controller = SimpleNamespace(
+        get_questions_with_answers=lambda: [(question, "")],
+        is_question_visible=lambda key, answers: True,
+    )
+    session = SimpleNamespace(
+        messages=[],
+        guided_answer_message_keys=set(),
+        guided_answer_message_values={},
+        guided_answer_message_indices={},
+    )
+
+    _append_guided_answer_history(session, [controller], {"symptom": "Husten"})
+    session.messages.append(ChatEntry(role="system", text="Naechste Frage?", tone="system"))
+    _append_guided_answer_history(session, [controller], {"symptom": "Fieber"})
+
+    assert [
+        (entry.role, entry.text)
+        for entry in session.messages
+    ] == [
+        ("system", "Welche Beschwerden haben Sie?"),
+        ("user", "Fieber"),
+        ("system", "Naechste Frage?"),
+    ]
+    assert session.guided_answer_message_indices == {"symptom": 1}
+
+
+def test_guided_answer_history_inserts_later_answer_before_pending_question() -> None:
+    current_question = SimpleNamespace(
+        key="current",
+        text="Aktuelle Frage?",
+    )
+    later_question = SimpleNamespace(
+        key="later",
+        text="Spaetere Frage?",
+    )
+    controller = SimpleNamespace(
+        current_question=current_question,
+        get_questions_with_answers=lambda: [
+            (current_question, ""),
+            (later_question, ""),
+        ],
+        is_question_visible=lambda key, answers: True,
+    )
+    session = SimpleNamespace(
+        messages=[
+            ChatEntry(role="system", text="Aktuelle Frage?", tone="system"),
+        ],
+        guided_answer_message_keys=set(),
+        guided_answer_message_values={},
+        guided_answer_message_indices={},
+    )
+
+    _append_guided_answer_history(
+        session,
+        [controller],
+        {"later": "Antwort spaeter"},
+    )
+
+    assert [
+        (entry.role, entry.text)
+        for entry in session.messages
+    ] == [
+        ("system", "Spaetere Frage?"),
+        ("user", "Antwort spaeter"),
+        ("system", "Aktuelle Frage?"),
+    ]
+    assert session.guided_answer_message_indices == {"later": 1}
+
+
+def test_guided_answer_history_answers_pending_question_in_place() -> None:
+    current_question = SimpleNamespace(
+        key="current",
+        text="Aktuelle Frage?",
+    )
+    controller = SimpleNamespace(
+        current_question=current_question,
+        get_questions_with_answers=lambda: [(current_question, "")],
+        is_question_visible=lambda key, answers: True,
+    )
+    session = SimpleNamespace(
+        messages=[
+            ChatEntry(role="system", text="Aktuelle Frage?", tone="system"),
+        ],
+        guided_answer_message_keys=set(),
+        guided_answer_message_values={},
+        guided_answer_message_indices={},
+    )
+
+    _append_guided_answer_history(
+        session,
+        [controller],
+        {"current": "Antwort aktuell"},
+    )
+
+    assert [
+        (entry.role, entry.text)
+        for entry in session.messages
+    ] == [
+        ("system", "Aktuelle Frage?"),
+        ("user", "Antwort aktuell"),
+    ]
+    assert session.guided_answer_message_indices == {"current": 1}
 
 
 def test_unknown_state_updates_all_blood_pressure_controls() -> None:

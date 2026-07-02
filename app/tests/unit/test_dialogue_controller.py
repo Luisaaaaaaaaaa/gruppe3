@@ -2,7 +2,7 @@ import pytest
 
 from app.dialogue.dialogue_controller import DialogueController
 from app.dialogue.state_machine import DialogueState
-from app.patient_import.patient_schema import PatientRecord
+from app.patient_import.patient_schema import PatientDetails, PatientRecord
 
 
 def test_question_progress_counts_only_displayed_questions() -> None:
@@ -27,6 +27,26 @@ def test_question_progress_counts_only_displayed_questions() -> None:
 
     assert current_question == 1
     assert total_questions == 36
+
+
+def test_file_diagnoses_replace_first_generic_scenario_question() -> None:
+    controller = DialogueController(
+        scenario_key="D",
+        patient=PatientRecord(
+            patient_id="demo-2",
+            first_name="Test",
+            last_name="Patient",
+            date_of_birth="1990-01-01",
+            details=PatientDetails(long_term_diagnoses=("Typ-2-Diabetes",)),
+        ),
+        display_message=lambda _text: None,
+        request_input=lambda _callback: None,
+    )
+
+    keys = [question.key for question, _answer in controller.get_questions_with_answers()]
+
+    assert "vorerkrankungen_liste" in keys
+    assert "bekannte_diagnosen" not in keys
 
 
 @pytest.mark.parametrize(
@@ -105,6 +125,36 @@ def test_preview_of_critical_value_does_not_end_anamnesis() -> None:
     assert any(flag.severity == "critical" for flag in flags)
     assert controller.state == DialogueState.ANAMNESIS
     assert controller.summary is None
+
+
+def test_apply_anamnesis_answers_continues_with_next_open_question() -> None:
+    callbacks: list = []
+    controller = DialogueController(
+        scenario_key="A",
+        patient=PatientRecord(patient_id="mode-switch", date_of_birth="1990-01-01"),
+        display_message=lambda _text: None,
+        request_input=callbacks.append,
+        defer_anamnesis=True,
+    )
+    controller.start()
+    callbacks.pop()("ja")
+    controller.begin_anamnesis()
+
+    first_question = controller.current_question
+    assert first_question is not None
+
+    controller.apply_anamnesis_answers(
+        {first_question.key: "x"},
+        continue_dialogue=True,
+    )
+
+    assert controller.current_question is not None
+    assert controller.current_question.key != first_question.key
+    answers = dict(
+        (question.key, answer)
+        for question, answer in controller.get_questions_with_answers()
+    )
+    assert answers[first_question.key] == "x"
 
 
 def test_hidden_follow_up_questions_are_not_open_points() -> None:
