@@ -1,0 +1,139 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="zustandsmodell-kompakt" name="Zustandsmodell kompakt">
+    <mxGraphModel dx="1471" dy="869" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=25;fontStyle=1;fontColor=#172033;" value="Zustandsmodell des Anamnese-Agenten" vertex="1">
+          <mxGeometry height="42" width="760" x="45" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="area-main" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=4;fillColor=#F8FAFD;strokeColor=#C9D3E1;dashed=1;dashPattern=8 6;verticalAlign=top;align=left;spacingTop=12;spacingLeft=14;fontFamily=Arial;fontSize=15;fontStyle=1;fontColor=#526070;" value="Normaler Ablauf" vertex="1">
+          <mxGeometry height="340" width="1230" x="35" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="area-special" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=4;fillColor=#FFF8F8;strokeColor=#E6B8B8;dashed=1;dashPattern=8 6;verticalAlign=top;align=left;spacingTop=12;spacingLeft=14;fontFamily=Arial;fontSize=15;fontStyle=1;fontColor=#8E3B3B;" value="Sonderpfade" vertex="1">
+          <mxGeometry height="220" width="1230" x="35" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="initial" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#172033;strokeColor=#172033;" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="60" y="201" as="geometry" />
+        </mxCell>
+        <mxCell id="entry" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EAF2FF;strokeColor=#4C78B8;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="Einstieg&lt;br&gt;Patienten- oder Personalmodus" vertex="1">
+          <mxGeometry height="88" width="190" x="115" y="169" as="geometry" />
+        </mxCell>
+        <mxCell id="identify" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EAFBF2;strokeColor=#2F9E64;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#17342F;" value="Patient festgelegt&lt;br&gt;und Szenario gewählt" vertex="1">
+          <mxGeometry height="88" width="185" x="440" y="169" as="geometry" />
+        </mxCell>
+        <mxCell id="consent" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFF7E6;strokeColor=#D69E2E;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="Rolle erklären&lt;br&gt;und Einwilligung einholen" vertex="1">
+          <mxGeometry height="88" width="195" x="750" y="169" as="geometry" />
+        </mxCell>
+        <mxCell id="anamnesis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EAF2FF;strokeColor=#4C78B8;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="KI-Anamnese mit Avatar&lt;br&gt;Fragen, Antworten, Vorbefüllung" vertex="1">
+          <mxGeometry height="88" width="220" x="965" y="305" as="geometry" />
+        </mxCell>
+        <mxCell id="vitals" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EAF2FF;strokeColor=#4C78B8;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="Vitalwerte erfassen&lt;br&gt;manuell oder simuliert" vertex="1">
+          <mxGeometry height="78" width="195" x="640" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="redflag" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D69E2E;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="Red-Flag-Prüfung" vertex="1">
+          <mxGeometry height="98" width="120" x="440" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="summary" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EAFBF2;strokeColor=#2F9E64;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#17342F;" value="Zusammenfassung&lt;br&gt;JSON / PDF / Übergabe" vertex="1">
+          <mxGeometry height="78" width="190" x="84" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="end" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#EEF2F6;strokeColor=#667085;strokeWidth=1.5;fontFamily=Arial;fontSize=15;fontColor=#172033;" value="Abschluss" vertex="1">
+          <mxGeometry height="70" width="170" x="94" y="565" as="geometry" />
+        </mxCell>
+        <mxCell id="escalation" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FDECEC;strokeColor=#C33C3C;strokeWidth=2;fontFamily=Arial;fontSize=15;fontColor=#8E2424;" value="Eskalation&lt;br&gt;sofortige ärztliche Übernahme" vertex="1">
+          <mxGeometry height="76" width="230" x="590" y="565" as="geometry" />
+        </mxCell>
+        <mxCell id="abort" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FDECEC;strokeColor=#C33C3C;strokeWidth=1.7;fontFamily=Arial;fontSize=15;fontColor=#8E2424;" value="Abbruch / keine Einwilligung" vertex="1">
+          <mxGeometry height="76" width="210" x="965" y="567" as="geometry" />
+        </mxCell>
+        <mxCell id="note" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=15;fillColor=#FFF4D6;strokeColor=#D6A53A;fontFamily=Arial;fontSize=13;fontColor=#57430A;align=left;spacing=10;" value="Der Normalfall läuft bis zur Übergabe; kritische Warnzeichen oder Abbruch führen zum vorzeitigen Abschluss." vertex="1">
+          <mxGeometry height="90" width="250" x="965" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" edge="1" parent="1" source="initial" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;" target="entry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="entry" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;" target="identify" value="Identitätsprüfung&amp;nbsp;&lt;div&gt;oder&amp;nbsp;&lt;/div&gt;&lt;div&gt;Personalübergabe&lt;/div&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="identify" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;" target="consent" value="Start Dialog">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="consent" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;" target="anamnesis" value="Einwilligung ja">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1105" y="213" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="anamnesis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="vitals" value="Anamnese fertig">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="965" y="349" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="vitals" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;" target="redflag" value="prüfen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="redflag" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#F8FAFD;" target="summary" value="unkritisch / Warnhinweis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="summary" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#344054;strokeWidth=1.7;fontFamily=Arial;fontSize=12;labelBackgroundColor=#FFF8F8;" target="end" value="Übergabe abgeschlossen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="redflag" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.9;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="escalation" value="critical">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="510" />
+              <mxPoint x="650" y="510" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="anamnesis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.9;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;entryX=0.75;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="escalation" value="kritische Teilantwort">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1075" y="520" />
+              <mxPoint x="762" y="520" />
+            </Array>
+            <mxPoint x="1094.92" y="334" as="sourcePoint" />
+            <mxPoint x="619.9969230769228" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="consent" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.8;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;" target="abort" value="nein">
+          <mxGeometry relative="1" x="0.0274" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="848" y="160" />
+              <mxPoint x="1230" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="anamnesis" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.8;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;" target="abort" value="abbrechen">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1160" y="420" />
+              <mxPoint x="1160" y="420" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="abort" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.8;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;" target="end" value="Ende">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1070" y="690" />
+              <mxPoint x="179" y="690" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="escalation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C33C3C;strokeWidth=1.8;fontFamily=Arial;fontSize=12;fontColor=#8E2424;labelBackgroundColor=#FFF8F8;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="end" value="Summary exportiert, dann Ende">
+          <mxGeometry relative="1" x="0.0643" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="480" y="603" />
+              <mxPoint x="480" y="603" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
