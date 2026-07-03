@@ -61,19 +61,25 @@ def extract_answers(
 
     try:
         from openai import APIConnectionError, APITimeoutError, OpenAI
+
+        client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=_request_timeout_seconds(),
+            max_retries=0,
+        )
     except ImportError:
         log_info(
             "openai-Bibliothek nicht installiert (pip install openai), "
             "überspringe KI-Antwort-Extraktion."
         )
-        return {}
-
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key,
-        timeout=_request_timeout_seconds(),
-        max_retries=0,
-    )
+        return {"_error": "KI-Agent ist derzeit nicht verfügbar (openai nicht installiert)."}
+    except Exception as exc:
+        log_info(
+            "Fehler beim Erstellen des KI-Clients: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        return {"_error": "KI-Agent ist derzeit nicht verfügbar."}
 
     questions_desc = [
         {
@@ -180,7 +186,7 @@ def extract_answers(
             f"({type(exc).__name__}). Überspringe KI-Antwort-Extraktion, "
             "der Fragebogen wird ohne Vorbefüllung fortgesetzt."
         )
-        return {}
+        return {"_error": "KI-Agent ist derzeit nicht verfügbar."}
     except json.JSONDecodeError as exc:
         log_info(f"KI-Antwort war kein gültiges JSON: {exc} – Rohtext: {raw!r}")
         return {}
@@ -191,4 +197,4 @@ def extract_answers(
             "Fehler bei der KI-Antwort-Extraktion: "
             f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
         )
-        return {}
+        return {"_error": "KI-Agent ist derzeit nicht verfügbar."}

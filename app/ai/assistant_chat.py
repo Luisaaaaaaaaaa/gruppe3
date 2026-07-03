@@ -91,19 +91,25 @@ def answer_question(
 
     try:
         from openai import OpenAI
+
+        client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=_request_timeout_seconds(),
+            max_retries=0,
+        )
     except ImportError:
         log_info(
             "openai-Bibliothek nicht installiert (pip install openai), "
             "Hilfe-Chat nicht verfügbar."
         )
         return OFFLINE_REPLY
-
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key,
-        timeout=_request_timeout_seconds(),
-        max_retries=0,
-    )
+    except Exception as exc:
+        log_info(
+            "Fehler beim Erstellen des KI-Clients (Hilfe-Chat): "
+            f"{type(exc).__name__}: {exc}"
+        )
+        return OFFLINE_REPLY
 
     context_block = _build_context_block(questions, answers)
 

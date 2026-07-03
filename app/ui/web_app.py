@@ -4214,7 +4214,14 @@ def _render_symptom_chat(
             ):
                 return
 
-            if prefilled:
+            if prefilled and prefilled.get("_error"):
+                ui.notify(
+                    prefilled["_error"],
+                    color="negative",
+                    position="top",
+                    multi_line=True,
+                )
+            elif prefilled:
                 ui.notify(
                     f"KI hat {len(prefilled)} Frage(n) vorausgefüllt.",
                     color="positive",
@@ -4268,6 +4275,12 @@ def _apply_symptom_chat_prefill(
     refresh_ui: Callable[[], None],
 ) -> bool:
     """Speichert KI-/Spracheingaben und prueft sofort auf kritische Red Flags."""
+    if prefilled and prefilled.get("_error"):
+        session.prefilled_answers = {}
+        session.ai_prefilled_keys.clear()
+        session.chat_phase_done = False
+        return False
+
     session.prefilled_answers = dict(prefilled)
     session.ai_prefilled_keys = set(prefilled)
     session.chat_phase_done = True
