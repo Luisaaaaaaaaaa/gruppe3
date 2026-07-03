@@ -2,104 +2,48 @@
   {
     "schema_version": "1.0",
     "source_system": {
-      "system_type": "Praxisverwaltungssystem",
-      "system_name": "Beispiel-PVS",
-      "exported_at": "2026-05-18T10:00:00+02:00",
-      "data_quality": "synthetische Beispieldaten, keine realen Patientendaten"
+      "name": "SET-Anamnese",
+      "version": "1.0"
     },
     "patient": {
       "patient_id": "PRA-0004711",
-      "aktenzeichen": "2024-0815-A",
       "status": "aktiv",
       "stammdaten": {
-        "nachname": "Schneider",
         "vorname": "Laura",
-        "geburtsname": "Müller",
+        "nachname": "Schneider",
         "geburtsdatum": "1986-03-14",
         "geschlecht": "weiblich",
-        "sprache": "de",
-        "staatsangehoerigkeit": "DE",
-        "familienstand": "verheiratet"
+        "sprache": "de"
       },
       "kontakt": {
         "adresse": {
-          "strasse": "Rheinpromenade",
-          "hausnummer": "12",
-          "plz": "68163",
-          "ort": "Mannheim",
-          "land": "DE"
+          "ort": "Mannheim"
         },
         "telefon_privat": "+49 621 1234567",
-        "telefon_mobil": "+49 170 5550101",
-        "email": "laura.schneider.beispiel@example.org",
-        "bevorzugter_kontaktweg": "mobil"
+        "telefon_mobil": "+49 170 5550101"
       },
       "versicherung": {
-        "versicherungsart": "gesetzlich",
         "krankenkasse": {
-          "name": "AOK Baden-Württemberg",
-          "kostentraegerkennung_ik": "108018007",
-          "kassennummer": "108018007"
-        },
-        "versichertennummer": "X123456789",
-        "versichertenstatus": "Mitglied",
-        "besondere_personengruppe": null,
-        "dmp": [
-          {
-            "programm": "Diabetes mellitus Typ 2",
-            "status": "eingeschrieben",
-            "seit": "2024-02-01"
-          }
-        ],
-        "zuzahlungsbefreiung": {
-          "status": false,
-          "gueltig_bis": null
-        },
-        "egk_eingelesen_am": "2026-04-29"
-      },
-      "administrativ": {
-        "erstkontakt_am": "2021-06-10",
-        "letzter_kontakt_am": "2026-04-29",
-        "behandelnde_praxis": "Hausarztpraxis Beispielzentrum",
-        "behandelnder_arzt": "Dr. med. Anna Berger",
-        "hausarztmodell": true,
-        "recall_aktiv": true,
-        "patientenhinweise": [
-          "Kommt häufig mit Fahrrad, kurze Wartezeiten bevorzugt.",
-          "Labor nüchtern einbestellen."
-        ],
-        "einwilligungen": {
-          "dsgvo_datenschutzhinweis_unterschrieben": true,
-          "email_kommunikation_erlaubt": true,
-          "sms_erinnerung_erlaubt": true,
-          "hausarztzentrierte_versorgung": true
+          "name": "AOK Baden-Württemberg"
         }
       },
-      "notfallkontakt": {
-        "name": "Markus Schneider",
-        "beziehung": "Ehemann",
-        "telefon": "+49 170 5550102"
+      "administrativ": {
+        "patientenhinweise": [
+          "Test-Notiz"
+        ]
       },
       "medizinische_uebersicht": {
-        "blutgruppe": "A+",
         "allergien": [
           {
             "substanz": "Penicillin",
-            "reaktion": "Exanthem",
             "schweregrad": "mittel",
             "gesichert": true
           }
         ],
-        "unvertraeglichkeiten": [
-          {
-            "substanz": "Laktose",
-            "reaktion": "abdominelle Beschwerden"
-          }
-        ],
         "risikofaktoren": {
+          "bmi": 29.4,
           "rauchen": "nie",
           "alkohol": "gelegentlich",
-          "bmi": 29.4,
           "familienanamnese": [
             "Vater: Diabetes mellitus Typ 2",
             "Mutter: arterielle Hypertonie"
@@ -108,155 +52,44 @@
         "dauerdiagnosen": [
           {
             "icd10": "E11.9",
-            "bezeichnung": "Diabetes mellitus Typ 2 ohne Komplikationen",
-            "diagnosesicherheit": "gesichert",
-            "seit": "2023-11-17",
-            "relevant": true
+            "bezeichnung": "Diabetes mellitus Typ 2 ohne Komplikationen"
           },
           {
             "icd10": "I10.90",
-            "bezeichnung": "Essentielle Hypertonie, nicht näher bezeichnet",
-            "diagnosesicherheit": "gesichert",
-            "seit": "2022-05-03",
-            "relevant": true
+            "bezeichnung": "Essentielle Hypertonie, nicht näher bezeichnet"
           }
         ],
         "akutdiagnosen": [
           {
             "icd10": "J06.9",
-            "bezeichnung": "Akute Infektion der oberen Atemwege, nicht näher bezeichnet",
-            "diagnosesicherheit": "gesichert",
-            "datum": "2026-04-29"
+            "bezeichnung": "Akute Infektion der oberen Atemwege, nicht näher bezeichnet"
           }
         ],
         "medikation": {
           "dauermedikation": [
             {
               "wirkstoff": "Metformin",
-              "praeparat": "Metformin 1000 mg Filmtabletten",
+              "praeparat": "Metformin",
               "dosierung": "1-0-1",
-              "einheit": "Tablette",
-              "beginn": "2023-11-17",
-              "hinweis": "zu den Mahlzeiten"
+              "hinweis": ""
             },
             {
               "wirkstoff": "Ramipril",
-              "praeparat": "Ramipril 5 mg Tabletten",
+              "praeparat": "Ramipril",
               "dosierung": "1-0-0",
-              "einheit": "Tablette",
-              "beginn": "2022-05-03",
-              "hinweis": "Blutdruckkontrolle"
+              "hinweis": ""
             }
           ],
           "bedarfsmedikation": [
             {
               "wirkstoff": "Ibuprofen",
-              "praeparat": "Ibuprofen 400 mg",
+              "praeparat": "Ibuprofen",
               "dosierung": "bei Bedarf max. 3x täglich",
-              "indikation": "Kopfschmerz",
-              "hinweis": "nicht nüchtern einnehmen"
+              "hinweis": ""
             }
-          ],
-          "medikationsplan_aktualisiert_am": "2026-04-29"
-        },
-        "impfstatus": [
-          {
-            "impfung": "Tetanus/Diphtherie/Pertussis",
-            "letzte_impfung": "2021-08-02",
-            "naechste_faelligkeit": "2031-08-02"
-          },
-          {
-            "impfung": "Influenza",
-            "letzte_impfung": "2025-10-12",
-            "naechste_faelligkeit": "2026-10-01"
-          }
-        ]
-      },
-      "letzte_messwerte": {
-        "vitalwerte": [
-          {
-            "datum": "2026-04-29",
-            "blutdruck_mmHg": "138/86",
-            "puls_pro_min": 78,
-            "gewicht_kg": 82.5,
-            "groesse_cm": 167,
-            "temperatur_c": 37.1,
-            "sauerstoffsaettigung_prozent": 98
-          }
-        ],
-        "labor": [
-          {
-            "datum": "2026-04-20",
-            "parameter": "HbA1c",
-            "wert": 6.9,
-            "einheit": "%",
-            "referenzbereich": "< 6.5",
-            "bewertung": "leicht erhöht"
-          },
-          {
-            "datum": "2026-04-20",
-            "parameter": "Kreatinin",
-            "wert": 0.82,
-            "einheit": "mg/dl",
-            "referenzbereich": "0.50-0.90",
-            "bewertung": "normal"
-          },
-          {
-            "datum": "2026-04-20",
-            "parameter": "LDL-Cholesterin",
-            "wert": 132,
-            "einheit": "mg/dl",
-            "referenzbereich": "< 115",
-            "bewertung": "erhöht"
-          }
-        ]
-      },
-      "verlauf": [
-        {
-          "datum": "2026-04-29",
-          "kontaktart": "Sprechstunde",
-          "anlass": "Husten, Schnupfen, leichte Halsschmerzen",
-          "subjektiv": "Seit 3 Tagen Erkältungssymptome, kein Fieber, kein Dyspnoegefühl.",
-          "objektiv": "Rachen gerötet, Lunge auskultatorisch frei, AZ gut.",
-          "beurteilung": "Viraler Infekt der oberen Atemwege.",
-          "plan": [
-            "Symptomatische Therapie",
-            "AU nicht erforderlich",
-            "Wiedervorstellung bei Fieber, Dyspnoe oder Verschlechterung"
-          ],
-          "arzt": "Dr. med. Anna Berger"
-        },
-        {
-          "datum": "2026-04-20",
-          "kontaktart": "Laborkontrolle",
-          "anlass": "Diabetes-DMP",
-          "beurteilung": "HbA1c leicht oberhalb Zielbereich, LDL erhöht.",
-          "plan": [
-            "Ernährungsberatung besprochen",
-            "Kontrolle HbA1c in 3 Monaten",
-            "Statin-Therapie beim nächsten Termin erneut besprechen"
-          ],
-          "arzt": "Dr. med. Anna Berger"
+          ]
         }
-      ],
-      "dokumente": [
-        {
-          "dokument_id": "DOC-2026-0429-001",
-          "typ": "Arztbrief",
-          "titel": "Kurzbrief Infekt obere Atemwege",
-          "datum": "2026-04-29",
-          "dateiname": "PRA-0004711_arztbrief_2026-04-29.pdf",
-          "verfuegbar": true
-        },
-        {
-          "dokument_id": "DOC-2026-0420-002",
-          "typ": "Laborbefund",
-          "titel": "Labor Diabetes-Kontrolle",
-          "datum": "2026-04-20",
-          "dateiname": "PRA-0004711_labor_2026-04-20.pdf",
-          "verfuegbar": true
-        }
-      ],
+      },
       "termine": {
         "naechster_termin": {
           "datum_uhrzeit": "2026-07-20T08:15:00+02:00",
@@ -265,8 +98,8 @@
         },
         "offene_aufgaben": [
           {
-            "faellig_am": "2026-07-20",
             "aufgabe": "HbA1c und Lipidprofil kontrollieren",
+            "faellig_am": "2026-07-20",
             "prioritaet": "normal"
           }
         ]
@@ -1061,6 +894,81 @@
       },
       "vorbereitete_szenarien": [
         "D"
+      ]
+    }
+  },
+  {
+    "schema_version": "1.0",
+    "source_system": {
+      "name": "SET-Anamnese",
+      "version": "1.0"
+    },
+    "patient": {
+      "patient_id": "MAN-0003",
+      "status": "aktiv",
+      "stammdaten": {
+        "vorname": "My Melanie",
+        "nachname": "Hoang",
+        "geburtsdatum": "2005-08-19",
+        "geschlecht": "weiblich",
+        "sprache": "de"
+      },
+      "kontakt": {
+        "adresse": {
+          "ort": "Mannheim"
+        },
+        "telefon_privat": "+49 xxx xxxxxxxx",
+        "telefon_mobil": "+49 xxx xxxxxxxxxx"
+      },
+      "versicherung": {
+        "krankenkasse": {
+          "name": "Versicherung xy"
+        }
+      },
+      "administrativ": {
+        "patientenhinweise": [
+          "Neue Notizen"
+        ]
+      },
+      "medizinische_uebersicht": {
+        "allergien": [
+          {
+            "substanz": "Pollen",
+            "schweregrad": "",
+            "gesichert": true
+          }
+        ],
+        "risikofaktoren": {},
+        "dauerdiagnosen": [
+          {
+            "icd10": "",
+            "bezeichnung": "Husten"
+          }
+        ],
+        "akutdiagnosen": [],
+        "medikation": {
+          "dauermedikation": [
+            {
+              "wirkstoff": "Tabletten",
+              "praeparat": "Tabletten",
+              "dosierung": "",
+              "hinweis": ""
+            }
+          ],
+          "bedarfsmedikation": []
+        }
+      },
+      "termine": {
+        "naechster_termin": {
+          "datum_uhrzeit": "2026-07-08T19:00",
+          "art": "Krankheit",
+          "hinweis": "Fieber"
+        },
+        "offene_aufgaben": []
+      },
+      "vorbereitete_szenarien": [
+        "A",
+        "B"
       ]
     }
   }

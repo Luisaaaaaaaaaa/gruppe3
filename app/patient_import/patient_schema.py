@@ -9,6 +9,7 @@ class PatientDetails:
     contact_city: str = ""
     insurance: str = ""
     phone: str = ""
+    phone_mobile: str = ""
     notes: str = ""
     next_appointment_at: str = ""
     next_appointment_type: str = ""

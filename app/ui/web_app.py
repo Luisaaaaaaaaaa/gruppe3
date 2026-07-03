@@ -2256,7 +2256,8 @@ def _open_new_patient_dialog(
             geburtsdatum = ui.input("Geburtsdatum").props(
                 f"outlined required type=date max={max_birth_date}"
             ).classes("w-full")
-            telefon = ui.input("Telefon").props("outlined").classes("w-full")
+            telefon_privat = ui.input("Telefon (privat)").props("outlined").classes("w-full")
+            telefon_mobil = ui.input("Telefon (mobil)").props("outlined").classes("w-full")
 
             with ui.row().classes("w-full gap-3"):
                 with ui.column().classes("grow gap-0"):
@@ -2271,15 +2272,7 @@ def _open_new_patient_dialog(
                         label="Geschlecht",
                         value=gender_value,
                     ).props("outlined").classes("w-full")
-                with ui.column().classes("grow gap-0"):
-                    groesse = ui.input(
-                        "Größe (cm)",
-                        value=(
-                            str(edit_patient.details.groesse_cm or "")
-                            if edit_patient
-                            else ""
-                        ),
-                    ).props("outlined type=number").classes("w-full")
+
             sprache = ui.input(
                 "Sprache",
                 value=edit_patient.details.language if edit_patient else "",
@@ -2296,7 +2289,8 @@ def _open_new_patient_dialog(
                 vorname.value = edit_patient.first_name
                 nachname.value = edit_patient.last_name
                 geburtsdatum.value = edit_patient.date_of_birth
-                telefon.value = edit_patient.details.phone
+                telefon_privat.value = edit_patient.details.phone
+                telefon_mobil.value = edit_patient.details.phone_mobile
 
         # --- Kurzinfos ---
         with ui.card().classes("surface-card w-full shadow-none q-mb-md"):
@@ -2401,13 +2395,13 @@ def _open_new_patient_dialog(
                     return _split_multiline_field(getattr(field, "value", None))
 
                 details = PatientDetails(
-                    phone=_form_text_value(telefon, orig_details.phone),
+                    phone=_form_text_value(telefon_privat, orig_details.phone),
+                    phone_mobile=_form_text_value(telefon_mobil, orig_details.phone_mobile),
                     notes=_form_text_value(notizen, orig_details.notes),
                     gender=_form_text_value(geschlecht, orig_details.gender),
                     language=_form_text_value(sprache, orig_details.language),
                     contact_city=_form_text_value(wohnort, orig_details.contact_city),
                     insurance=_form_text_value(versicherung, orig_details.insurance),
-                    groesse_cm=int(groesse.value) if groesse is not None and groesse.value.strip() else orig_details.groesse_cm,
                     next_appointment_at=_form_text_value(termindatum, orig_details.next_appointment_at),
                     next_appointment_type=_form_text_value(terminart, orig_details.next_appointment_type),
                     next_appointment_note=_form_text_value(terminnotiz, orig_details.next_appointment_note),

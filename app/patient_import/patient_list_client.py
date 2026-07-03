@@ -57,6 +57,8 @@ class PatientListClient:
             language=master_data.get("sprache", ""),
             contact_city=adresse.get("ort", ""),
             insurance=krankenkasse.get("name", ""),
+            phone=kontakt.get("telefon_privat", ""),
+            phone_mobile=kontakt.get("telefon_mobil", ""),
             next_appointment_at=next_appointment.get("datum_uhrzeit", ""),
             next_appointment_type=next_appointment.get("art", ""),
             next_appointment_note=next_appointment.get("hinweis", ""),
@@ -266,7 +268,8 @@ class PatientListClient:
                 },
                 "kontakt": {
                     "adresse": {"ort": details.contact_city},
-                    "telefon": details.phone,
+                    "telefon_privat": details.phone,
+                    "telefon_mobil": details.phone_mobile,
                 },
                 "versicherung": {
                     "krankenkasse": {"name": details.insurance},
